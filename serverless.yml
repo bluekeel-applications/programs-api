@@ -22,6 +22,7 @@ provider:
   region: us-east-1
 
 functions:
+# CREATE
   createEndpoint:
     handler: api/create.newEndpoint
     events:
@@ -29,6 +30,7 @@ functions:
           path: api/programs/endpoint
           method: post
           cors: true
+# READ
   getAllEndpoints:
     handler: api/read.getAllEndpoints
     events:
@@ -42,4 +44,12 @@ functions:
       - http:
           path: api/program/{dm}/{mt}/{vt}/{lt}/{dt}/{da}/{co}/{do}/{eo}
           method: get
+          cors: true
+# DELETE
+  deleteProgram:
+    handler: api/delete.removeProgram
+    events:
+      - http:
+          path: api/program/remove/{dm}/{mt}/{vt}/{lt}/{dt}/{da}/{co}/{do}/{eo}
+          method: delete
           cors: true

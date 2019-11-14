@@ -1,0 +1,31 @@
+service: programs-api
+
+package:
+  individually: true
+
+plugins:
+  - serverless-bundle
+  - serverless-offline
+  - serverless-dotenv-plugin
+
+custom:
+  stage: ${opt:stage, self:provider.stage}
+  environment:
+    DB: ${env:DB_CONNECTION_STRING}
+
+provider:
+  name: aws
+  runtime: nodejs10.x
+  memorySize: 128
+  timeout: 10
+  stage: dev
+  region: us-east-1
+
+functions:
+  createEndpoint:
+    handler: api/create.newEndpoint
+    events:
+      - http:
+          path: api/programs/endpoint
+          method: post
+          cors: true

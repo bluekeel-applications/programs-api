@@ -4,7 +4,9 @@
   "description": "A Serverless API for handling BlueKeel Programs",
   "main": "db.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "dev": "sls offline start --skipCacheInvalidation",
+    "deploy": "sls deploy -v -s prod"
   },
   "author": "Weston Gibler",
   "license": "ISC",

@@ -90,12 +90,12 @@
 /*!**************************************************************************!*\
   !*** /Users/admin/Code/work/repos/BlueKeel/API/programs-api/api/read.js ***!
   \**************************************************************************/
-/*! exports provided: getAllEndpoints, getOneProgram */
+/*! exports provided: getAllPrograms, getOneProgram */
 /***/ (function(module, __webpack_exports__, __webpack_require__) {
 
 "use strict";
 __webpack_require__.r(__webpack_exports__);
-/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "getAllEndpoints", function() { return getAllEndpoints; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "getAllPrograms", function() { return getAllPrograms; });
 /* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "getOneProgram", function() { return getOneProgram; });
 /* harmony import */ var source_map_support_register__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! source-map-support/register */ "../../source-map-support/register.js");
 /* harmony import */ var source_map_support_register__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(source_map_support_register__WEBPACK_IMPORTED_MODULE_0__);
@@ -106,7 +106,7 @@ __webpack_require__.r(__webpack_exports__);
 
 
 
-async function getAllEndpoints(context) {
+async function getAllPrograms(context) {
   context.callbackWaitsForEmptyEventLoop = false;
 
   try {
@@ -126,20 +126,21 @@ async function getAllEndpoints(context) {
 }
 async function getOneProgram(event, context) {
   context.callbackWaitsForEmptyEventLoop = false;
+  const data = JSON.parse(event.body);
 
   try {
     await Object(_db__WEBPACK_IMPORTED_MODULE_1__["default"])();
     let queryObj = {
-      domain: event.pathParameters.dm,
+      domain: data.domain,
       vars: {
-        media_type: event.pathParameters.mt,
-        vertical: event.pathParameters.vt,
-        loan_type: event.pathParameters.lt,
-        debt_type: event.pathParameters.dt,
-        debt_amount: event.pathParameters.da,
-        checking_optin: event.pathParameters.co,
-        debt_optin: event.pathParameters.do,
-        email_optin: event.pathParameters.eo
+        media_type: data.vars.media_type,
+        vertical: data.vars.vertical,
+        loan_type: data.vars.loan_type,
+        debt_type: data.vars.debt_type,
+        debt_amount: data.vars.debt_amount,
+        checking_optin: data.vars.checking_optin,
+        debt_optin: data.vars.debt_optin,
+        email_optin: data.vars.email_optin
       }
     };
     const program = await _models_Program__WEBPACK_IMPORTED_MODULE_2__["default"].findOne(queryObj, 'endpoints');
@@ -282,7 +283,7 @@ const ProgramSchema = new mongoose.Schema({
   }],
   clickCount: {
     type: Number,
-    default: 1000
+    default: 0
   },
   created: {
     type: Date,

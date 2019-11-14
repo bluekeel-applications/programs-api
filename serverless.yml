@@ -23,16 +23,16 @@ provider:
 
 functions:
 # CREATE
-  createEndpoint:
-    handler: api/create.newEndpoint
+  createProgram:
+    handler: api/create.newProgram
     events:
       - http:
-          path: api/programs/endpoint
+          path: api/program/add
           method: post
           cors: true
 # READ
-  getAllEndpoints:
-    handler: api/read.getAllEndpoints
+  getAllPrograms:
+    handler: api/read.getAllPrograms
     events:
       - http:
           path: api/program/all
@@ -42,14 +42,14 @@ functions:
     handler: api/read.getOneProgram
     events:
       - http:
-          path: api/program/{dm}/{mt}/{vt}/{lt}/{dt}/{da}/{co}/{do}/{eo}
-          method: get
+          path: api/program/endpoints
+          method: any
           cors: true
 # DELETE
   deleteProgram:
     handler: api/delete.removeProgram
     events:
       - http:
-          path: api/program/remove/{dm}/{mt}/{vt}/{lt}/{dt}/{da}/{co}/{do}/{eo}
+          path: api/program/remove
           method: delete
           cors: true

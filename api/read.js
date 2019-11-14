@@ -6,7 +6,7 @@ import {
 } from "../libs/response-lib";
 
 
-export async function getAllEndpoints(context) {
+export async function getAllPrograms(context) {
     context.callbackWaitsForEmptyEventLoop = false;
     try {
         await connectToDatabase();
@@ -25,22 +25,23 @@ export async function getAllEndpoints(context) {
 
 export async function getOneProgram(event, context) {
     context.callbackWaitsForEmptyEventLoop = false;
+    const data = JSON.parse(event.body);
+
     try {
         await connectToDatabase();
         let queryObj = {
-            domain: event.pathParameters.dm,
+            domain: data.domain,
             vars: {
-                media_type: event.pathParameters.mt,
-                vertical: event.pathParameters.vt,
-                loan_type: event.pathParameters.lt,
-                debt_type: event.pathParameters.dt,
-                debt_amount: event.pathParameters.da,
-                checking_optin: event.pathParameters.co,
-                debt_optin: event.pathParameters.do,
-                email_optin: event.pathParameters.eo
+                media_type: data.vars.media_type,
+                vertical: data.vars.vertical,
+                loan_type: data.vars.loan_type,
+                debt_type: data.vars.debt_type,
+                debt_amount: data.vars.debt_amount,
+                checking_optin: data.vars.checking_optin,
+                debt_optin: data.vars.debt_optin,
+                email_optin: data.vars.email_optin
             }
         };
-
         const program = await Program.findOne(queryObj, 'endpoints');
         return success(program);
 

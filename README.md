@@ -46,10 +46,14 @@ yarn dev
 yarn deploy
 ```
 
-<!-- ## Functions
+## Functions
 
-```bash    
-``` -->
+```bash
+    createEndpoint: programs-api-prod-createEndpoint
+    getAllEndpoints: programs-api-prod-getAllEndpoints
+    getOneProgram: programs-api-prod-getOneProgram
+    deleteProgram: programs-api-prod-deleteProgram
+```
 
 ## License
 

@@ -90,12 +90,12 @@
 /*!****************************************************************************!*\
   !*** /Users/admin/Code/work/repos/BlueKeel/API/programs-api/api/create.js ***!
   \****************************************************************************/
-/*! exports provided: newEndpoint */
+/*! exports provided: newProgram */
 /***/ (function(module, __webpack_exports__, __webpack_require__) {
 
 "use strict";
 __webpack_require__.r(__webpack_exports__);
-/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "newEndpoint", function() { return newEndpoint; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "newProgram", function() { return newProgram; });
 /* harmony import */ var source_map_support_register__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! source-map-support/register */ "../../source-map-support/register.js");
 /* harmony import */ var source_map_support_register__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(source_map_support_register__WEBPACK_IMPORTED_MODULE_0__);
 /* harmony import */ var _db__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ../db */ "../../../db.js");
@@ -105,7 +105,7 @@ __webpack_require__.r(__webpack_exports__);
 
 
 
-async function newEndpoint(event, context) {
+async function newProgram(event, context) {
   context.callbackWaitsForEmptyEventLoop = false;
   const data = JSON.parse(event.body);
 
@@ -114,7 +114,7 @@ async function newEndpoint(event, context) {
     const response = await _models_Program__WEBPACK_IMPORTED_MODULE_2__["default"].create(data);
     return Object(_libs_response_lib__WEBPACK_IMPORTED_MODULE_3__["success"])(response);
   } catch (err) {
-    console.log('Error creating new Program Endpoint:', err);
+    console.log('Error creating new Program:', err);
     return Object(_libs_response_lib__WEBPACK_IMPORTED_MODULE_3__["failure"])({
       status: false
     });
@@ -251,7 +251,7 @@ const ProgramSchema = new mongoose.Schema({
   }],
   clickCount: {
     type: Number,
-    default: 1000
+    default: 0
   },
   created: {
     type: Date,

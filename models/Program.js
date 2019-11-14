@@ -23,7 +23,7 @@ const ProgramSchema = new mongoose.Schema({
     }],
     clickCount: {
         type: Number,
-        default: 1000
+        default: 0
     },
     created: {
         type: Date,

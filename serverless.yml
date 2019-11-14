@@ -33,6 +33,13 @@ functions:
     handler: api/read.getAllEndpoints
     events:
       - http:
-          path: api/programs/all
+          path: api/program/all
+          method: get
+          cors: true
+  getOneProgram:
+    handler: api/read.getOneProgram
+    events:
+      - http:
+          path: api/program/{dm}/{mt}/{vt}/{lt}/{dt}/{da}/{co}/{do}/{eo}
           method: get
           cors: true

@@ -29,3 +29,10 @@ functions:
           path: api/programs/endpoint
           method: post
           cors: true
+  getAllEndpoints:
+    handler: api/read.getAllEndpoints
+    events:
+      - http:
+          path: api/programs/all
+          method: get
+          cors: true

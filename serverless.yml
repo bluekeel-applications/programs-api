@@ -9,6 +9,16 @@ plugins:
   - serverless-dotenv-plugin
 
 custom:
+  allowedHeaders:
+    - Accept
+    - Content-Type
+    - Content-Length
+    - Authorization
+    - Access-Control-Allow-Origin
+    - X-Amz-Date
+    - X-Api-Key
+    - X-Amz-Security-Token
+    - X-Amz-User-Agent
   stage: ${opt:stage, self:provider.stage}
   environment:
     DB: ${env:DB_CONNECTION_STRING}
@@ -44,6 +54,13 @@ functions:
       - http:
           path: api/program/endpoints
           method: any
+          cors: true
+  getDomainList:
+    handler: api/read.getDomainList
+    events:
+      - http:
+          path: api/program/domain/all
+          method: get
           cors: true
 # DELETE
   deleteProgram:

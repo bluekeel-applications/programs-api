@@ -21,7 +21,24 @@ export async function getAllPrograms(context) {
             status: false
         });
     }
-}
+};
+
+export async function getDomainList(context) {
+    context.callbackWaitsForEmptyEventLoop = false;
+    try {
+        await connectToDatabase();
+        const domains = await Program.find({
+            domain: { $exists: true }
+        }, 'title domain description avatar');
+
+        return success(domains);
+    } catch (err) {
+        console.log('Error getting list of domains:', err);
+        return failure({
+            status: false
+        });
+    }
+};
 
 export async function getOneProgram(event, context) {
     context.callbackWaitsForEmptyEventLoop = false;

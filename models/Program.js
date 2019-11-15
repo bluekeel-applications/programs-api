@@ -15,7 +15,10 @@ const VarObj = new mongoose.Schema({
 });
 
 const ProgramSchema = new mongoose.Schema({
+    title: String,
     domain: String,
+    description: String,
+    avatar: String,
     vars: VarObj,
     endpoints: [{
         url: String,

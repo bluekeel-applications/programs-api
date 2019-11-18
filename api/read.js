@@ -58,7 +58,7 @@ export async function getOneProgram(event, context) {
                 email_optin: data.vars.email_optin
             }
         };
-        const program = await Program.findOne(queryObj, 'endpoints');
+        const program = await Program.findOne(queryObj, 'endpoints click_count');
         return success(program);
 
     } catch (err) {

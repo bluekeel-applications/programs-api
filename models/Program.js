@@ -21,7 +21,7 @@ const ProgramSchema = new mongoose.Schema({
         url: String,
         usage: Number
     }],
-    clickCount: {
+    click_count: {
         type: Number,
         default: 0
     },

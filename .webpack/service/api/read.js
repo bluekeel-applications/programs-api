@@ -90,24 +90,26 @@
 /*!**************************************************************************!*\
   !*** /Users/admin/Code/work/repos/BlueKeel/API/programs-api/api/read.js ***!
   \**************************************************************************/
-/*! exports provided: getAllPrograms, getDomainList, getOneProgram */
+/*! exports provided: getAllEndpoints, getAllDomains, getOneProgram */
 /***/ (function(module, __webpack_exports__, __webpack_require__) {
 
 "use strict";
 __webpack_require__.r(__webpack_exports__);
-/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "getAllPrograms", function() { return getAllPrograms; });
-/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "getDomainList", function() { return getDomainList; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "getAllEndpoints", function() { return getAllEndpoints; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "getAllDomains", function() { return getAllDomains; });
 /* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "getOneProgram", function() { return getOneProgram; });
 /* harmony import */ var source_map_support_register__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! source-map-support/register */ "../../source-map-support/register.js");
 /* harmony import */ var source_map_support_register__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(source_map_support_register__WEBPACK_IMPORTED_MODULE_0__);
 /* harmony import */ var _db__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ../db */ "../../../db.js");
 /* harmony import */ var _models_Program__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! ../models/Program */ "../../../models/Program.js");
-/* harmony import */ var _libs_response_lib__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! ../libs/response-lib */ "../../../libs/response-lib.js");
+/* harmony import */ var _models_Domain__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! ../models/Domain */ "../../../models/Domain.js");
+/* harmony import */ var _libs_response_lib__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(/*! ../libs/response-lib */ "../../../libs/response-lib.js");
 
 
 
 
-async function getAllPrograms(context) {
+
+async function getAllEndpoints(context) {
   context.callbackWaitsForEmptyEventLoop = false;
 
   try {
@@ -116,30 +118,30 @@ async function getAllPrograms(context) {
       endpoints: {
         $exists: true
       }
-    });
-    return Object(_libs_response_lib__WEBPACK_IMPORTED_MODULE_3__["success"])(endpoints);
+    }, 'endpoints');
+    return Object(_libs_response_lib__WEBPACK_IMPORTED_MODULE_4__["success"])(endpoints);
   } catch (err) {
-    console.log('Error getting all users:', err);
-    return Object(_libs_response_lib__WEBPACK_IMPORTED_MODULE_3__["failure"])({
+    console.log('Error getting all endpoints:', err);
+    return Object(_libs_response_lib__WEBPACK_IMPORTED_MODULE_4__["failure"])({
       status: false
     });
   }
 }
 ;
-async function getDomainList(context) {
+async function getAllDomains(context) {
   context.callbackWaitsForEmptyEventLoop = false;
 
   try {
     await Object(_db__WEBPACK_IMPORTED_MODULE_1__["default"])();
-    const domains = await _models_Program__WEBPACK_IMPORTED_MODULE_2__["default"].find({
+    const domains = await _models_Domain__WEBPACK_IMPORTED_MODULE_3__["default"].find({
       domain: {
         $exists: true
       }
     }, 'title domain description avatar');
-    return Object(_libs_response_lib__WEBPACK_IMPORTED_MODULE_3__["success"])(domains);
+    return Object(_libs_response_lib__WEBPACK_IMPORTED_MODULE_4__["success"])(domains);
   } catch (err) {
     console.log('Error getting list of domains:', err);
-    return Object(_libs_response_lib__WEBPACK_IMPORTED_MODULE_3__["failure"])({
+    return Object(_libs_response_lib__WEBPACK_IMPORTED_MODULE_4__["failure"])({
       status: false
     });
   }
@@ -165,10 +167,10 @@ async function getOneProgram(event, context) {
       }
     };
     const program = await _models_Program__WEBPACK_IMPORTED_MODULE_2__["default"].findOne(queryObj, 'endpoints');
-    return Object(_libs_response_lib__WEBPACK_IMPORTED_MODULE_3__["success"])(program);
+    return Object(_libs_response_lib__WEBPACK_IMPORTED_MODULE_4__["success"])(program);
   } catch (err) {
     console.log('Error getting User by ID:', err);
-    return Object(_libs_response_lib__WEBPACK_IMPORTED_MODULE_3__["failure"])({
+    return Object(_libs_response_lib__WEBPACK_IMPORTED_MODULE_4__["failure"])({
       status: false
     });
   }
@@ -263,6 +265,41 @@ function buildResponse(statusCode, body) {
     body: JSON.stringify(body)
   };
 }
+
+/***/ }),
+
+/***/ "../../../models/Domain.js":
+/*!*******************************************************************************!*\
+  !*** /Users/admin/Code/work/repos/BlueKeel/API/programs-api/models/Domain.js ***!
+  \*******************************************************************************/
+/*! exports provided: default */
+/***/ (function(module, __webpack_exports__, __webpack_require__) {
+
+"use strict";
+__webpack_require__.r(__webpack_exports__);
+/* harmony import */ var source_map_support_register__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! source-map-support/register */ "../../source-map-support/register.js");
+/* harmony import */ var source_map_support_register__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(source_map_support_register__WEBPACK_IMPORTED_MODULE_0__);
+
+
+const mongoose = __webpack_require__(/*! mongoose */ "../../mongoose/index.js");
+
+const DomainSchema = new mongoose.Schema({
+  title: String,
+  domain: String,
+  description: String,
+  avatar: String,
+  created: {
+    type: Date,
+    default: Date.now,
+    required: true
+  },
+  modified: {
+    type: Date,
+    default: Date.now,
+    required: true
+  }
+});
+/* harmony default export */ __webpack_exports__["default"] = (mongoose.model('Domain', DomainSchema));
 
 /***/ }),
 

@@ -1,33 +1,32 @@
 import connectToDatabase from '../db';
 import Program from '../models/Program';
-import {
-    success,
-    failure
-} from "../libs/response-lib";
+import Domain from '../models/Domain';
+
+import { success, failure } from "../libs/response-lib";
 
 
-export async function getAllPrograms(context) {
+export async function getAllEndpoints(context) {
     context.callbackWaitsForEmptyEventLoop = false;
     try {
         await connectToDatabase();
         const endpoints = await Program.find({
             endpoints: { $exists: true }
-        });
+        }, 'endpoints');
 
         return success(endpoints);
     } catch (err) {
-        console.log('Error getting all users:', err);
+        console.log('Error getting all endpoints:', err);
         return failure({
             status: false
         });
     }
 };
 
-export async function getDomainList(context) {
+export async function getAllDomains(context) {
     context.callbackWaitsForEmptyEventLoop = false;
     try {
         await connectToDatabase();
-        const domains = await Program.find({
+        const domains = await Domain.find({
             domain: { $exists: true }
         }, 'title domain description avatar');
 

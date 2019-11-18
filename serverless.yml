@@ -37,36 +37,36 @@ functions:
     handler: api/create.newDomain
     events:
       - http:
-          path: api/program/addDomain
+          path: api/program/add_domain
           method: post
           cors: true
   createEndpoint:
     handler: api/create.newEndpoint
     events:
       - http:
-          path: api/program/addEndpoint
+          path: api/program/add_endpoint
           method: post
           cors: true
 # READ
-  getAllPrograms:
-    handler: api/read.getAllPrograms
+  getAllEndpoints:
+    handler: api/read.getAllEndpoints
     events:
       - http:
-          path: api/program/all
+          path: api/program/all_endpoints
           method: get
           cors: true
-  getOneProgram:
+  getProgramEndpoints:
     handler: api/read.getOneProgram
     events:
       - http:
           path: api/program/endpoints
           method: any
           cors: true
-  getDomainList:
-    handler: api/read.getDomainList
+  getAllDomains:
+    handler: api/read.getAllDomains
     events:
       - http:
-          path: api/program/domain/all
+          path: api/program/all_domains
           method: get
           cors: true
 # DELETE

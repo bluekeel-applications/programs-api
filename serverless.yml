@@ -33,11 +33,18 @@ provider:
 
 functions:
 # CREATE
-  createProgram:
-    handler: api/create.newProgram
+  createDomain:
+    handler: api/create.newDomain
     events:
       - http:
-          path: api/program/add
+          path: api/program/addDomain
+          method: post
+          cors: true
+  createEndpoint:
+    handler: api/create.newEndpoint
+    events:
+      - http:
+          path: api/program/addEndpoint
           method: post
           cors: true
 # READ

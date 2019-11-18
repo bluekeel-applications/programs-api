@@ -15,6 +15,7 @@
   },
   "dependencies": {
     "dotenv": "^8.2.0",
+    "mongodb-stitch": "^3.6.0",
     "mongoose": "^5.7.10",
     "serverless-bundle": "^1.2.5",
     "serverless-dotenv-plugin": "^2.1.1"

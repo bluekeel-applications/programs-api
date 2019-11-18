@@ -1,8 +1,25 @@
 import connectToDatabase from '../db';
 import Program from '../models/Program';
+import Domain from '../models/Domain';
+
 import { success, failure } from "../libs/response-lib";
 
-export async function newProgram(event, context) {
+export const newDomain = async (event, context) => {
+    context.callbackWaitsForEmptyEventLoop = false;
+    const data = JSON.parse(event.body);
+
+    try {
+        await connectToDatabase();
+        const response = await Domain.create(data);
+        return success(response);
+
+    } catch (err) {
+        console.log('Error creating new Domain:', err);
+        return failure({ status: false });
+    }
+};
+
+export const newEndpoint = async (event, context) => {
     context.callbackWaitsForEmptyEventLoop = false;
     const data = JSON.parse(event.body);
 
@@ -14,4 +31,4 @@ export async function newProgram(event, context) {
         console.log('Error creating new Program:', err);
         return failure({ status: false });
     }
-}
+};

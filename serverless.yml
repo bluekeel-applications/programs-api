@@ -44,7 +44,7 @@ functions:
     handler: api/create.newEndpoint
     events:
       - http:
-          path: api/program/add_endpoint
+          path: api/program/new_endpoint
           method: post
           cors: true
 # READ
@@ -68,6 +68,14 @@ functions:
       - http:
           path: api/program/all_domains
           method: get
+          cors: true
+# UPDATE
+  updateEndpoints:
+    handler: api/update.endpoints
+    events:
+      - http:
+          path: api/program/update_endpoints
+          method: any
           cors: true
 # DELETE
   deleteProgram:

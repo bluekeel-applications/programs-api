@@ -2,7 +2,7 @@ import connectToDatabase from '../db';
 import Program from '../models/Program';
 import Domain from '../models/Domain';
 
-import { success, failure } from "../libs/response-lib";
+import { success, failure, buildQueryObj } from "../libs/response-lib";
 
 
 export async function getAllEndpoints(context) {
@@ -45,19 +45,7 @@ export async function getOneProgram(event, context) {
 
     try {
         await connectToDatabase();
-        let queryObj = {
-            domain: data.domain,
-            vars: {
-                media_type: data.vars.media_type,
-                vertical: data.vars.vertical,
-                loan_type: data.vars.loan_type,
-                debt_type: data.vars.debt_type,
-                debt_amount: data.vars.debt_amount,
-                checking_optin: data.vars.checking_optin,
-                debt_optin: data.vars.debt_optin,
-                email_optin: data.vars.email_optin
-            }
-        };
+        let queryObj = buildQueryObj(data);
         const program = await Program.findOne(queryObj, 'endpoints click_count');
         return success(program);
 

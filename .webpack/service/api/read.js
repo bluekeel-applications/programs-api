@@ -154,7 +154,7 @@ async function getOneProgram(event, context) {
   try {
     await Object(_db__WEBPACK_IMPORTED_MODULE_1__["default"])();
     let queryObj = Object(_libs_response_lib__WEBPACK_IMPORTED_MODULE_4__["buildQueryObj"])(data);
-    const program = await _models_Program__WEBPACK_IMPORTED_MODULE_2__["default"].findOne(queryObj, 'endpoints click_count');
+    const program = await _models_Program__WEBPACK_IMPORTED_MODULE_2__["default"].findOne(queryObj, '_id endpoints click_count');
     return Object(_libs_response_lib__WEBPACK_IMPORTED_MODULE_4__["success"])(program);
   } catch (err) {
     console.log('Error getting User by ID:', err);

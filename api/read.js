@@ -46,7 +46,7 @@ export async function getOneProgram(event, context) {
     try {
         await connectToDatabase();
         let queryObj = buildQueryObj(data);
-        const program = await Program.findOne(queryObj, 'endpoints click_count');
+        const program = await Program.findOne(queryObj, '_id endpoints click_count');
         return success(program);
 
     } catch (err) {

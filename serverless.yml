@@ -89,6 +89,6 @@ functions:
     handler: api/delete.removeEndpoint
     events:
       - http:
-          path: api/program/remove/{endpoint_id}
+          path: api/program/remove/{program_id}/{endpoint_id}
           method: delete
           cors: true

@@ -32,14 +32,24 @@ export const removeProgram = async(event, context) => {
 
 export const removeEndpoint = async(event, context) => {
     context.callbackWaitsForEmptyEventLoop = false;
-    const data = event.para;
+    const endpointId = event.pathParameters.endpoint_id;
+    const programId = event.pathParameters.program_id;
     try {
         await connectToDatabase();
-        const deleteResponse = await Program.findByIdAndDelete(data.id);
-        return success(deleteResponse);
+        let program;
+        //Check if program exists in DB; error out in not
+        program = await Program.findById(programId, '_id endpoints click_count');
+        if (!program) {
+            throw new Error('There is no Program found with ID:', programId);
+        }
+        program.endpoints.pull(endpointId);
+        program.save((err) => {
+            if(err) return failure({ status: false, body: err });
+            console.log('Endpoint: ' + endpointId + ' removed successfully');
+        });
 
     } catch (err) {
-        console.log('Error deleting program:', err);
+        console.log('Error deleting program endpoint:',endpointId, err);
         return failure({ status: false });
     }
 };

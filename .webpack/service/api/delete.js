@@ -136,14 +136,29 @@ const removeProgram = async (event, context) => {
 };
 const removeEndpoint = async (event, context) => {
   context.callbackWaitsForEmptyEventLoop = false;
-  const data = event.para;
+  const endpointId = event.pathParameters.endpoint_id;
+  const programId = event.pathParameters.program_id;
 
   try {
     await Object(_db__WEBPACK_IMPORTED_MODULE_1__["default"])();
-    const deleteResponse = await _models_Program__WEBPACK_IMPORTED_MODULE_2__["default"].findByIdAndDelete(data.id);
-    return Object(_libs_response_lib__WEBPACK_IMPORTED_MODULE_3__["success"])(deleteResponse);
+    let program; //Check if program exists in DB; error out in not
+
+    program = await _models_Program__WEBPACK_IMPORTED_MODULE_2__["default"].findById(programId, '_id endpoints click_count');
+
+    if (!program) {
+      throw new Error('There is no Program found with ID:', programId);
+    }
+
+    program.endpoints.pull(endpointId);
+    program.save(err => {
+      if (err) return Object(_libs_response_lib__WEBPACK_IMPORTED_MODULE_3__["failure"])({
+        status: false,
+        body: err
+      });
+      console.log('Endpoint: ' + endpointId + ' removed successfully');
+    });
   } catch (err) {
-    console.log('Error deleting program:', err);
+    console.log('Error deleting program endpoint:', endpointId, err);
     return Object(_libs_response_lib__WEBPACK_IMPORTED_MODULE_3__["failure"])({
       status: false
     });

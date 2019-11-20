@@ -136,7 +136,7 @@ const removeProgram = async (event, context) => {
 };
 const removeEndpoint = async (event, context) => {
   context.callbackWaitsForEmptyEventLoop = false;
-  const endpointId = event.pathParameters.endpoint_id;
+  const endpointId = event.queryStringParameters.ep_id;
   const programId = event.pathParameters.program_id;
 
   try {
@@ -157,6 +157,7 @@ const removeEndpoint = async (event, context) => {
       });
       console.log('Endpoint: ' + endpointId + ' removed successfully');
     });
+    return Object(_libs_response_lib__WEBPACK_IMPORTED_MODULE_3__["success"])(program);
   } catch (err) {
     console.log('Error deleting program endpoint:', endpointId, err);
     return Object(_libs_response_lib__WEBPACK_IMPORTED_MODULE_3__["failure"])({

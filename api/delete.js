@@ -32,7 +32,7 @@ export const removeProgram = async(event, context) => {
 
 export const removeEndpoint = async(event, context) => {
     context.callbackWaitsForEmptyEventLoop = false;
-    const endpointId = event.pathParameters.endpoint_id;
+    const endpointId = event.queryStringParameters.ep_id;
     const programId = event.pathParameters.program_id;
     try {
         await connectToDatabase();
@@ -47,7 +47,7 @@ export const removeEndpoint = async(event, context) => {
             if(err) return failure({ status: false, body: err });
             console.log('Endpoint: ' + endpointId + ' removed successfully');
         });
-
+        return success(program);
     } catch (err) {
         console.log('Error deleting program endpoint:',endpointId, err);
         return failure({ status: false });

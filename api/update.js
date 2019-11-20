@@ -34,8 +34,32 @@ export const endpoints = async(event, context) => {
 
     } catch (err) {
         console.log('Error getting Program:', err);
-        return failure({
-            status: false
+        return failure({ status: false });
+    }
+};
+
+export const endpointUrl = async(event, context) => {
+    context.callbackWaitsForEmptyEventLoop = false;
+    const endpointId = event.queryStringParameters.ep_id;
+    const programId = event.pathParameters.program_id;
+    const data = JSON.parse(event.body);
+    try {
+        await connectToDatabase();
+        let program;
+        // Double-Check if program exists in DB; error out in not
+        program = await Program.findById(programId);
+        if (!program) {
+            throw new Error('There is no Program found with ID:', programId);
+        }
+        program.endpoints.id(endpointId).url = data.url;
+        program.save((err) => {
+            if (err) return failure({ status: false,body: err });
+            console.log('Endpoint updated successfully to:', data.url);
         });
+        return success(program.endpoints.id(endpointId));
+
+    } catch (err) {
+        console.log('Error getting Program:', err);
+        return failure({ status: false });
     }
 };

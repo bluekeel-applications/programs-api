@@ -28,7 +28,7 @@ export const endpoints = async(event, context) => {
         return success(res);
 
     } catch (err) {
-        console.log('Error getting User by ID:', err);
+        console.log('Error getting Program:', err);
         return failure({
             status: false
         });

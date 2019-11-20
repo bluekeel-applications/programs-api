@@ -90,13 +90,13 @@
 /*!****************************************************************************!*\
   !*** /Users/admin/Code/work/repos/BlueKeel/API/programs-api/api/create.js ***!
   \****************************************************************************/
-/*! exports provided: newDomain, newEndpoint */
+/*! exports provided: newDomain, newProgram */
 /***/ (function(module, __webpack_exports__, __webpack_require__) {
 
 "use strict";
 __webpack_require__.r(__webpack_exports__);
 /* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "newDomain", function() { return newDomain; });
-/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "newEndpoint", function() { return newEndpoint; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "newProgram", function() { return newProgram; });
 /* harmony import */ var source_map_support_register__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! source-map-support/register */ "../../source-map-support/register.js");
 /* harmony import */ var source_map_support_register__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(source_map_support_register__WEBPACK_IMPORTED_MODULE_0__);
 /* harmony import */ var _db__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ../db */ "../../../db.js");
@@ -123,7 +123,7 @@ const newDomain = async (event, context) => {
     });
   }
 };
-const newEndpoint = async (event, context) => {
+const newProgram = async (event, context) => {
   context.callbackWaitsForEmptyEventLoop = false;
   const data = JSON.parse(event.body);
 

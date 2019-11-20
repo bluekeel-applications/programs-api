@@ -40,11 +40,11 @@ functions:
           path: api/program/add_domain
           method: post
           cors: true
-  createEndpoint:
-    handler: api/create.newEndpoint
+  createProgram:
+    handler: api/create.newProgram
     events:
       - http:
-          path: api/program/new_endpoint
+          path: api/program/new_program
           method: post
           cors: true
 # READ
@@ -75,7 +75,7 @@ functions:
     events:
       - http:
           path: api/program/update_endpoints
-          method: any
+          method: put
           cors: true
 # DELETE
   deleteProgram:

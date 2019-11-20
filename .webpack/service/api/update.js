@@ -129,7 +129,7 @@ const endpoints = async (event, context) => {
     const res = await program.save();
     return Object(_libs_response_lib__WEBPACK_IMPORTED_MODULE_3__["success"])(res);
   } catch (err) {
-    console.log('Error getting User by ID:', err);
+    console.log('Error getting Program:', err);
     return Object(_libs_response_lib__WEBPACK_IMPORTED_MODULE_3__["failure"])({
       status: false
     });

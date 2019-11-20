@@ -19,7 +19,7 @@ export const newDomain = async (event, context) => {
     }
 };
 
-export const newEndpoint = async (event, context) => {
+export const newProgram = async (event, context) => {
     context.callbackWaitsForEmptyEventLoop = false;
     const data = JSON.parse(event.body);
 

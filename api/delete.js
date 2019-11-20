@@ -2,7 +2,7 @@ import connectToDatabase from '../db';
 import Program from '../models/Program';
 import { success, failure } from "../libs/response-lib";
 
-export async function removeProgram(event, context) {
+export const removeProgram = async(event, context) => {
     context.callbackWaitsForEmptyEventLoop = false;
     const data = JSON.parse(event.body);
     try {
@@ -28,4 +28,18 @@ export async function removeProgram(event, context) {
         console.log('Error deleting program:', err);
         return failure({ status: false });
     }
-}
+};
+
+export const removeEndpoint = async(event, context) => {
+    context.callbackWaitsForEmptyEventLoop = false;
+    const data = event.para;
+    try {
+        await connectToDatabase();
+        const deleteResponse = await Program.findByIdAndDelete(data.id);
+        return success(deleteResponse);
+
+    } catch (err) {
+        console.log('Error deleting program:', err);
+        return failure({ status: false });
+    }
+};

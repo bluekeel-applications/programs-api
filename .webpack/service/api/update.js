@@ -116,9 +116,19 @@ const endpoints = async (event, context) => {
     let newEndpoint = {
       url: data.new_endpoint,
       usage: 0
-    }; //Find the program
+    };
+    let program; //Check if program exists in DB; make one if not
 
-    const program = await _models_Program__WEBPACK_IMPORTED_MODULE_2__["default"].findOne(queryObj, '_id endpoints click_count'); //Grab endpoint list
+    program = await _models_Program__WEBPACK_IMPORTED_MODULE_2__["default"].findOne(queryObj, '_id endpoints click_count');
+
+    if (!program) {
+      const endpointField = {
+        endpoints: []
+      };
+      const newProgram = Object.assign(queryObj, endpointField);
+      program = await _models_Program__WEBPACK_IMPORTED_MODULE_2__["default"].create(newProgram);
+    } //Grab endpoint list
+
 
     let programEndpoints = program.endpoints; //Add new endpoint to list
 

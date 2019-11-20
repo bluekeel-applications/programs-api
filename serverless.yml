@@ -75,7 +75,7 @@ functions:
     events:
       - http:
           path: api/program/update_endpoints
-          method: put
+          method: any
           cors: true
 # DELETE
   deleteProgram:
@@ -83,5 +83,12 @@ functions:
     events:
       - http:
           path: api/program/remove
+          method: delete
+          cors: true
+  deleteEndpoint:
+    handler: api/delete.removeEndpoint
+    events:
+      - http:
+          path: api/program/remove/{endpoint_id}
           method: delete
           cors: true

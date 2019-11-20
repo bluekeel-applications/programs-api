@@ -2,12 +2,11 @@ import connectToDatabase from '../db';
 import Program from '../models/Program';
 // import Domain from '../models/Domain';
 
-import { success, failure, buildQueryObj } from "../libs/response-lib";
+import { failure, buildQueryObj, success } from "../libs/response-lib";
 
 export const endpoints = async(event, context) => {
     context.callbackWaitsForEmptyEventLoop = false;
     const data = JSON.parse(event.body);
-
     try {
         await connectToDatabase();
         let queryObj = buildQueryObj(data);
@@ -15,8 +14,14 @@ export const endpoints = async(event, context) => {
             url: data.new_endpoint,
             usage: 0
         };
-        //Find the program
-        const program = await Program.findOne(queryObj, '_id endpoints click_count');
+        let program;
+        //Check if program exists in DB; make one if not
+        program = await Program.findOne(queryObj, '_id endpoints click_count');
+        if(!program) {
+            const endpointField = { endpoints:[] };
+            const newProgram = Object.assign(queryObj, endpointField);
+            program = await Program.create(newProgram);
+        }
         //Grab endpoint list
         let programEndpoints = program.endpoints;
         //Add new endpoint to list

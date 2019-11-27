@@ -117,7 +117,7 @@ const newDomain = async (event, context) => {
     const response = await _models_Domain__WEBPACK_IMPORTED_MODULE_3__["default"].create(data);
     return Object(_libs_response_lib__WEBPACK_IMPORTED_MODULE_4__["success"])(response);
   } catch (err) {
-    console.log('Error creating new Domain:', err);
+    console.log('Error creating new Program Domain:', err);
     return Object(_libs_response_lib__WEBPACK_IMPORTED_MODULE_4__["failure"])({
       status: false
     });

@@ -47,6 +47,13 @@ functions:
           path: api/program/new_program
           method: post
           cors: true
+          updateEndpoints:
+    handler: api/create.endpoint
+    events:
+      - http:
+          path: api/program/add_endpoint
+          method: any
+          cors: true
 # READ
   getAllEndpoints:
     handler: api/read.getAllEndpoints
@@ -71,11 +78,11 @@ functions:
           cors: true
 # UPDATE
   updateEndpoints:
-    handler: api/update.endpoints
+    handler: api/update.programEndpoints
     events:
       - http:
-          path: api/program/update_endpoints
-          method: any
+          path: api/program/{program_id}/update_endpoints
+          method: put
           cors: true
   updateEndpointUrl:
     handler: api/update.endpointUrl

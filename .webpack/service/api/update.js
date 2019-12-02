@@ -90,13 +90,13 @@
 /*!****************************************************************************!*\
   !*** /Users/admin/Code/work/repos/BlueKeel/API/programs-api/api/update.js ***!
   \****************************************************************************/
-/*! exports provided: endpoints, endpointUrl */
+/*! exports provided: endpointUrl, programEndpoints */
 /***/ (function(module, __webpack_exports__, __webpack_require__) {
 
 "use strict";
 __webpack_require__.r(__webpack_exports__);
-/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "endpoints", function() { return endpoints; });
 /* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "endpointUrl", function() { return endpointUrl; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "programEndpoints", function() { return programEndpoints; });
 /* harmony import */ var source_map_support_register__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! source-map-support/register */ "../../source-map-support/register.js");
 /* harmony import */ var source_map_support_register__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(source_map_support_register__WEBPACK_IMPORTED_MODULE_0__);
 /* harmony import */ var _db__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ../db */ "../../../db.js");
@@ -107,45 +107,6 @@ __webpack_require__.r(__webpack_exports__);
  // import Domain from '../models/Domain';
 
 
-const endpoints = async (event, context) => {
-  context.callbackWaitsForEmptyEventLoop = false;
-  const data = JSON.parse(event.body);
-
-  try {
-    await Object(_db__WEBPACK_IMPORTED_MODULE_1__["default"])();
-    let queryObj = Object(_libs_response_lib__WEBPACK_IMPORTED_MODULE_3__["buildQueryObj"])(data);
-    let newEndpoint = {
-      url: data.new_endpoint,
-      usage: 0
-    };
-    let program; //Check if program exists in DB; make one if not
-
-    program = await _models_Program__WEBPACK_IMPORTED_MODULE_2__["default"].findOne(queryObj, '_id endpoints click_count');
-
-    if (!program) {
-      const endpointField = {
-        endpoints: []
-      };
-      const newProgram = Object.assign(queryObj, endpointField);
-      program = await _models_Program__WEBPACK_IMPORTED_MODULE_2__["default"].create(newProgram);
-    } //Grab endpoint list
-
-
-    let programEndpoints = program.endpoints; //Add new endpoint to list
-
-    programEndpoints.push(newEndpoint); //Update the list on the document
-
-    program.endpoints = programEndpoints; //Save changes to document
-
-    const res = await program.save();
-    return Object(_libs_response_lib__WEBPACK_IMPORTED_MODULE_3__["success"])(res);
-  } catch (err) {
-    console.log('Error getting Program:', err);
-    return Object(_libs_response_lib__WEBPACK_IMPORTED_MODULE_3__["failure"])({
-      status: false
-    });
-  }
-};
 const endpointUrl = async (event, context) => {
   context.callbackWaitsForEmptyEventLoop = false;
   const endpointId = event.queryStringParameters.ep_id;
@@ -154,8 +115,7 @@ const endpointUrl = async (event, context) => {
 
   try {
     await Object(_db__WEBPACK_IMPORTED_MODULE_1__["default"])();
-    let program; // Double-Check if program exists in DB; error out in not
-
+    let program;
     program = await _models_Program__WEBPACK_IMPORTED_MODULE_2__["default"].findById(programId);
 
     if (!program) {
@@ -171,6 +131,36 @@ const endpointUrl = async (event, context) => {
       console.log('Endpoint updated successfully to:', data.url);
     });
     return Object(_libs_response_lib__WEBPACK_IMPORTED_MODULE_3__["success"])(program.endpoints.id(endpointId));
+  } catch (err) {
+    console.log('Error getting Program:', err);
+    return Object(_libs_response_lib__WEBPACK_IMPORTED_MODULE_3__["failure"])({
+      status: false
+    });
+  }
+};
+const programEndpoints = async (event, context) => {
+  context.callbackWaitsForEmptyEventLoop = false;
+  const programId = event.pathParameters.program_id;
+  const data = JSON.parse(event.body);
+
+  try {
+    await Object(_db__WEBPACK_IMPORTED_MODULE_1__["default"])();
+    let program;
+    program = await _models_Program__WEBPACK_IMPORTED_MODULE_2__["default"].findById(programId);
+
+    if (!program) {
+      throw new Error('There is no Program found with ID:', programId);
+    }
+
+    program.endpoints = data;
+    program.save(err => {
+      if (err) return Object(_libs_response_lib__WEBPACK_IMPORTED_MODULE_3__["failure"])({
+        status: false,
+        body: err
+      });
+      console.log('Endpoint updated successfully to Program');
+    });
+    return Object(_libs_response_lib__WEBPACK_IMPORTED_MODULE_3__["success"])(program);
   } catch (err) {
     console.log('Error getting Program:', err);
     return Object(_libs_response_lib__WEBPACK_IMPORTED_MODULE_3__["failure"])({

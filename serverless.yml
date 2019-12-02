@@ -47,7 +47,7 @@ functions:
           path: api/program/new_program
           method: post
           cors: true
-          updateEndpoints:
+  createEndpoint:
     handler: api/create.endpoint
     events:
       - http:
@@ -96,7 +96,7 @@ functions:
     handler: api/delete.removeProgram
     events:
       - http:
-          path: api/program/remove
+          path: api/program/removeById/{program_id}
           method: delete
           cors: true
   deleteEndpoint:

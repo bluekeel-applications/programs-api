@@ -101,35 +101,24 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony import */ var source_map_support_register__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(source_map_support_register__WEBPACK_IMPORTED_MODULE_0__);
 /* harmony import */ var _db__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ../db */ "../../../db.js");
 /* harmony import */ var _models_Program__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! ../models/Program */ "../../../models/Program.js");
-/* harmony import */ var _libs_response_lib__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! ../libs/response-lib */ "../../../libs/response-lib.js");
+/* harmony import */ var _models_Domain__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! ../models/Domain */ "../../../models/Domain.js");
+/* harmony import */ var _libs_response_lib__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(/*! ../libs/response-lib */ "../../../libs/response-lib.js");
+
 
 
 
 
 const removeProgram = async (event, context) => {
   context.callbackWaitsForEmptyEventLoop = false;
-  const data = JSON.parse(event.body);
+  const programId = event.pathParameters.program_id;
 
   try {
     await Object(_db__WEBPACK_IMPORTED_MODULE_1__["default"])();
-    let queryObj = {
-      domain: data.domain,
-      vars: {
-        media_type: data.vars.media_type,
-        vertical: data.vars.vertical,
-        loan_type: data.vars.loan_type,
-        debt_type: data.vars.debt_type,
-        debt_amount: data.vars.debt_amount,
-        checking_optin: data.vars.checking_optin,
-        debt_optin: data.vars.debt_optin,
-        email_optin: data.vars.email_optin
-      }
-    };
-    const program = await _models_Program__WEBPACK_IMPORTED_MODULE_2__["default"].findOneAndDelete(queryObj);
-    return Object(_libs_response_lib__WEBPACK_IMPORTED_MODULE_3__["success"])(program);
+    const program = await _models_Domain__WEBPACK_IMPORTED_MODULE_3__["default"].findByIdAndDelete(programId);
+    return Object(_libs_response_lib__WEBPACK_IMPORTED_MODULE_4__["success"])(program);
   } catch (err) {
     console.log('Error deleting program:', err);
-    return Object(_libs_response_lib__WEBPACK_IMPORTED_MODULE_3__["failure"])({
+    return Object(_libs_response_lib__WEBPACK_IMPORTED_MODULE_4__["failure"])({
       status: false
     });
   }
@@ -151,16 +140,16 @@ const removeEndpoint = async (event, context) => {
 
     program.endpoints.pull(endpointId);
     program.save(err => {
-      if (err) return Object(_libs_response_lib__WEBPACK_IMPORTED_MODULE_3__["failure"])({
+      if (err) return Object(_libs_response_lib__WEBPACK_IMPORTED_MODULE_4__["failure"])({
         status: false,
         body: err
       });
       console.log('Endpoint: ' + endpointId + ' removed successfully');
     });
-    return Object(_libs_response_lib__WEBPACK_IMPORTED_MODULE_3__["success"])(program);
+    return Object(_libs_response_lib__WEBPACK_IMPORTED_MODULE_4__["success"])(program);
   } catch (err) {
     console.log('Error deleting program endpoint:', endpointId, err);
-    return Object(_libs_response_lib__WEBPACK_IMPORTED_MODULE_3__["failure"])({
+    return Object(_libs_response_lib__WEBPACK_IMPORTED_MODULE_4__["failure"])({
       status: false
     });
   }
@@ -275,6 +264,41 @@ const buildQueryObj = data => {
     }
   };
 };
+
+/***/ }),
+
+/***/ "../../../models/Domain.js":
+/*!*******************************************************************************!*\
+  !*** /Users/admin/Code/work/repos/BlueKeel/API/programs-api/models/Domain.js ***!
+  \*******************************************************************************/
+/*! exports provided: default */
+/***/ (function(module, __webpack_exports__, __webpack_require__) {
+
+"use strict";
+__webpack_require__.r(__webpack_exports__);
+/* harmony import */ var source_map_support_register__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! source-map-support/register */ "../../source-map-support/register.js");
+/* harmony import */ var source_map_support_register__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(source_map_support_register__WEBPACK_IMPORTED_MODULE_0__);
+
+
+const mongoose = __webpack_require__(/*! mongoose */ "../../mongoose/index.js");
+
+const DomainSchema = new mongoose.Schema({
+  title: String,
+  domain: String,
+  description: String,
+  avatar: String,
+  created: {
+    type: Date,
+    default: Date.now,
+    required: true
+  },
+  modified: {
+    type: Date,
+    default: Date.now,
+    required: true
+  }
+});
+/* harmony default export */ __webpack_exports__["default"] = (mongoose.model('Domain', DomainSchema));
 
 /***/ }),
 

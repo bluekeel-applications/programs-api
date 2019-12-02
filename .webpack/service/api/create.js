@@ -90,13 +90,14 @@
 /*!****************************************************************************!*\
   !*** /Users/admin/Code/work/repos/BlueKeel/API/programs-api/api/create.js ***!
   \****************************************************************************/
-/*! exports provided: newDomain, newProgram */
+/*! exports provided: newDomain, newProgram, endpoint */
 /***/ (function(module, __webpack_exports__, __webpack_require__) {
 
 "use strict";
 __webpack_require__.r(__webpack_exports__);
 /* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "newDomain", function() { return newDomain; });
 /* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "newProgram", function() { return newProgram; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "endpoint", function() { return endpoint; });
 /* harmony import */ var source_map_support_register__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! source-map-support/register */ "../../source-map-support/register.js");
 /* harmony import */ var source_map_support_register__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(source_map_support_register__WEBPACK_IMPORTED_MODULE_0__);
 /* harmony import */ var _db__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ../db */ "../../../db.js");
@@ -133,6 +134,45 @@ const newProgram = async (event, context) => {
     return Object(_libs_response_lib__WEBPACK_IMPORTED_MODULE_4__["success"])(response);
   } catch (err) {
     console.log('Error creating new Program:', err);
+    return Object(_libs_response_lib__WEBPACK_IMPORTED_MODULE_4__["failure"])({
+      status: false
+    });
+  }
+};
+const endpoint = async (event, context) => {
+  context.callbackWaitsForEmptyEventLoop = false;
+  const data = JSON.parse(event.body);
+
+  try {
+    await Object(_db__WEBPACK_IMPORTED_MODULE_1__["default"])();
+    let queryObj = Object(_libs_response_lib__WEBPACK_IMPORTED_MODULE_4__["buildQueryObj"])(data);
+    let newEndpoint = {
+      url: data.new_endpoint,
+      usage: 0
+    };
+    let program; //Check if program exists in DB; make one if not
+
+    program = await _models_Program__WEBPACK_IMPORTED_MODULE_2__["default"].findOne(queryObj, '_id endpoints click_count');
+
+    if (!program) {
+      const endpointField = {
+        endpoints: []
+      };
+      const newProgram = Object.assign(queryObj, endpointField);
+      program = await _models_Program__WEBPACK_IMPORTED_MODULE_2__["default"].create(newProgram);
+    } //Grab endpoint list
+
+
+    let programEndpoints = program.endpoints; //Add new endpoint to list
+
+    programEndpoints.push(newEndpoint); //Update the list on the document
+
+    program.endpoints = programEndpoints; //Save changes to document
+
+    const res = await program.save();
+    return Object(_libs_response_lib__WEBPACK_IMPORTED_MODULE_4__["success"])(res);
+  } catch (err) {
+    console.log('Error getting Program:', err);
     return Object(_libs_response_lib__WEBPACK_IMPORTED_MODULE_4__["failure"])({
       status: false
     });

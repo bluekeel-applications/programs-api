@@ -1,27 +1,16 @@
 import connectToDatabase from '../db';
 import Program from '../models/Program';
+import Domain from '../models/Domain';
+
 import { success, failure } from "../libs/response-lib";
 
 export const removeProgram = async(event, context) => {
     context.callbackWaitsForEmptyEventLoop = false;
-    const data = JSON.parse(event.body);
+    const programId = event.pathParameters.program_id;
     try {
         await connectToDatabase();
-        let queryObj = {
-            domain: data.domain,
-            vars: {
-                media_type: data.vars.media_type,
-                vertical: data.vars.vertical,
-                loan_type: data.vars.loan_type,
-                debt_type: data.vars.debt_type,
-                debt_amount: data.vars.debt_amount,
-                checking_optin: data.vars.checking_optin,
-                debt_optin: data.vars.debt_optin,
-                email_optin: data.vars.email_optin
-            }
-        };
-
-        const program = await Program.findOneAndDelete(queryObj);
+        
+        const program = await Domain.findByIdAndDelete(programId);
         return success(program);
 
     } catch (err) {

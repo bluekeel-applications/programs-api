@@ -91,11 +91,11 @@ functions:
           path: api/program/{program_id}/update_endpoints
           method: put
           cors: true
-  updateEndpointUrl:
-    handler: api/update.endpointUrl
+  updateEndpoint:
+    handler: api/update.endpoint
     events:
       - http:
-          path: api/program/{program_id}/update_url
+          path: api/program/{program_id}/update_one
           method: put
           cors: true
   updateProgramDomain:

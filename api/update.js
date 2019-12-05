@@ -4,7 +4,7 @@ import Domain from '../models/Domain';
 
 import { failure, success } from "../libs/response-lib";
 
-export const endpointUrl = async(event, context) => {
+export const endpoint = async(event, context) => {
     context.callbackWaitsForEmptyEventLoop = false;
     const endpointId = event.queryStringParameters.ep_id;
     const programId = event.pathParameters.program_id;
@@ -17,14 +17,15 @@ export const endpointUrl = async(event, context) => {
             throw new Error('There is no Program found with ID:', programId);
         }
         program.endpoints.id(endpointId).url = data.url;
+        program.endpoints.id(endpointId).name = data.name;
         program.save((err) => {
             if (err) return failure({ status: false,body: err });
-            console.log('Endpoint updated successfully to:', data.url);
+            console.log('Endpoint updated successfully for:', data.name);
         });
-        return success(program.endpoints.id(endpointId));
+        return success(program.endpoints);
 
     } catch (err) {
-        console.log('Error getting Program:', err);
+        console.log('Error updating endpoint:', err);
         return failure({ status: false });
     }
 };

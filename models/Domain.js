@@ -6,6 +6,10 @@ const DomainSchema = new mongoose.Schema({
     domain: String,
     description: String,
     avatar: String,
+    accepts: [{
+        type: String,
+        avatar: String
+    }],
     created: {
         type: Date,
         default: Date.now,

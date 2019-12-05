@@ -40,7 +40,8 @@ export const endpoint = async (event, context) => {
         await connectToDatabase();
         let queryObj = buildQueryObj(data);
         let newEndpoint = {
-            url: data.new_endpoint,
+            name: data.new_endpoint.name,
+            url: data.new_endpoint.url,
             usage: 0
         };
         let program;

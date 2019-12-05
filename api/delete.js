@@ -9,7 +9,6 @@ export const removeProgram = async(event, context) => {
     const programId = event.pathParameters.program_id;
     try {
         await connectToDatabase();
-        
         const program = await Domain.findByIdAndDelete(programId);
         return success(program);
 

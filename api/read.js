@@ -53,4 +53,22 @@ export async function getOneProgram(event, context) {
         console.log('Error getting User by ID:', err);
         return failure({status: false});
     }
-}
+};
+
+export async function getListByDomain(event, context) {
+    context.callbackWaitsForEmptyEventLoop = false;
+    const reqData = JSON.parse(event.body);
+    const domainName = reqData.domain;
+    try {
+        await connectToDatabase();
+        const programs = await Program.find({
+            domain: domainName
+        });
+        return success(programs);
+    } catch (err) {
+        console.log('Error getting list by:', err);
+        return failure({
+            status: false
+        });
+    }
+};

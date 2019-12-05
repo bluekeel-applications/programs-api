@@ -147,7 +147,8 @@ const endpoint = async (event, context) => {
     await Object(_db__WEBPACK_IMPORTED_MODULE_1__["default"])();
     let queryObj = Object(_libs_response_lib__WEBPACK_IMPORTED_MODULE_4__["buildQueryObj"])(data);
     let newEndpoint = {
-      url: data.new_endpoint,
+      name: data.new_endpoint.name,
+      url: data.new_endpoint.url,
       usage: 0
     };
     let program; //Check if program exists in DB; make one if not
@@ -358,6 +359,7 @@ const ProgramSchema = new mongoose.Schema({
   domain: String,
   vars: VarObj,
   endpoints: [{
+    name: String,
     url: String,
     usage: Number
   }],

@@ -90,7 +90,7 @@
 /*!**************************************************************************!*\
   !*** /Users/admin/Code/work/repos/BlueKeel/API/programs-api/api/read.js ***!
   \**************************************************************************/
-/*! exports provided: getAllEndpoints, getAllDomains, getOneProgram */
+/*! exports provided: getAllEndpoints, getAllDomains, getOneProgram, getListByDomain */
 /***/ (function(module, __webpack_exports__, __webpack_require__) {
 
 "use strict";
@@ -98,6 +98,7 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "getAllEndpoints", function() { return getAllEndpoints; });
 /* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "getAllDomains", function() { return getAllDomains; });
 /* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "getOneProgram", function() { return getOneProgram; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "getListByDomain", function() { return getListByDomain; });
 /* harmony import */ var source_map_support_register__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! source-map-support/register */ "../../source-map-support/register.js");
 /* harmony import */ var source_map_support_register__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(source_map_support_register__WEBPACK_IMPORTED_MODULE_0__);
 /* harmony import */ var _db__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ../db */ "../../../db.js");
@@ -163,6 +164,26 @@ async function getOneProgram(event, context) {
     });
   }
 }
+;
+async function getListByDomain(event, context) {
+  context.callbackWaitsForEmptyEventLoop = false;
+  const reqData = JSON.parse(event.body);
+  const domainName = reqData.domain;
+
+  try {
+    await Object(_db__WEBPACK_IMPORTED_MODULE_1__["default"])();
+    const programs = await _models_Program__WEBPACK_IMPORTED_MODULE_2__["default"].find({
+      domain: domainName
+    });
+    return Object(_libs_response_lib__WEBPACK_IMPORTED_MODULE_4__["success"])(programs);
+  } catch (err) {
+    console.log('Error getting list by:', err);
+    return Object(_libs_response_lib__WEBPACK_IMPORTED_MODULE_4__["failure"])({
+      status: false
+    });
+  }
+}
+;
 
 /***/ }),
 
@@ -343,6 +364,7 @@ const ProgramSchema = new mongoose.Schema({
   domain: String,
   vars: VarObj,
   endpoints: [{
+    name: String,
     url: String,
     usage: Number
   }],

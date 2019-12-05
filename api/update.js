@@ -1,6 +1,6 @@
 import connectToDatabase from '../db';
 import Program from '../models/Program';
-// import Domain from '../models/Domain';
+import Domain from '../models/Domain';
 
 import { failure, success } from "../libs/response-lib";
 
@@ -44,6 +44,33 @@ export const programEndpoints = async(event, context) => {
         program.save((err) => {
             if (err) return failure({ status: false,body: err });
             console.log('Endpoint updated successfully to Program');
+        });
+        return success(program);
+
+    } catch (err) {
+        console.log('Error getting Program:', err);
+        return failure({ status: false });
+    }
+};
+
+export const programDomain = async(event, context) => {
+    context.callbackWaitsForEmptyEventLoop = false;
+    const programId = event.pathParameters.program_id;
+    const data = JSON.parse(event.body);
+    try {
+        await connectToDatabase();
+        let program;
+        program = await Domain.findById(programId);
+        if (!program) {
+            throw new Error('There is no Program found with ID:', programId);
+        }
+        program.title = data.name_value || 'N/A';
+        program.domain = data.domain_value || 'N/A';
+        program.description = data.description_value || 'N/A';
+        program.avatar = data.avatar_src || 'N/A';
+        program.save((err) => {
+            if (err) return failure({ status: false,body: err });
+            console.log('Program updated successfully');
         });
         return success(program);
 

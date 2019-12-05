@@ -18,6 +18,7 @@ const ProgramSchema = new mongoose.Schema({
     domain: String,
     vars: VarObj,
     endpoints: [{
+        name: String,
         url: String,
         usage: Number
     }],

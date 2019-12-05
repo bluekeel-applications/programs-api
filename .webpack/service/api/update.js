@@ -90,21 +90,23 @@
 /*!****************************************************************************!*\
   !*** /Users/admin/Code/work/repos/BlueKeel/API/programs-api/api/update.js ***!
   \****************************************************************************/
-/*! exports provided: endpointUrl, programEndpoints */
+/*! exports provided: endpointUrl, programEndpoints, programDomain */
 /***/ (function(module, __webpack_exports__, __webpack_require__) {
 
 "use strict";
 __webpack_require__.r(__webpack_exports__);
 /* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "endpointUrl", function() { return endpointUrl; });
 /* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "programEndpoints", function() { return programEndpoints; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "programDomain", function() { return programDomain; });
 /* harmony import */ var source_map_support_register__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! source-map-support/register */ "../../source-map-support/register.js");
 /* harmony import */ var source_map_support_register__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(source_map_support_register__WEBPACK_IMPORTED_MODULE_0__);
 /* harmony import */ var _db__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ../db */ "../../../db.js");
 /* harmony import */ var _models_Program__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! ../models/Program */ "../../../models/Program.js");
-/* harmony import */ var _libs_response_lib__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! ../libs/response-lib */ "../../../libs/response-lib.js");
+/* harmony import */ var _models_Domain__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! ../models/Domain */ "../../../models/Domain.js");
+/* harmony import */ var _libs_response_lib__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(/*! ../libs/response-lib */ "../../../libs/response-lib.js");
 
 
- // import Domain from '../models/Domain';
+
 
 
 const endpointUrl = async (event, context) => {
@@ -124,16 +126,16 @@ const endpointUrl = async (event, context) => {
 
     program.endpoints.id(endpointId).url = data.url;
     program.save(err => {
-      if (err) return Object(_libs_response_lib__WEBPACK_IMPORTED_MODULE_3__["failure"])({
+      if (err) return Object(_libs_response_lib__WEBPACK_IMPORTED_MODULE_4__["failure"])({
         status: false,
         body: err
       });
       console.log('Endpoint updated successfully to:', data.url);
     });
-    return Object(_libs_response_lib__WEBPACK_IMPORTED_MODULE_3__["success"])(program.endpoints.id(endpointId));
+    return Object(_libs_response_lib__WEBPACK_IMPORTED_MODULE_4__["success"])(program.endpoints.id(endpointId));
   } catch (err) {
     console.log('Error getting Program:', err);
-    return Object(_libs_response_lib__WEBPACK_IMPORTED_MODULE_3__["failure"])({
+    return Object(_libs_response_lib__WEBPACK_IMPORTED_MODULE_4__["failure"])({
       status: false
     });
   }
@@ -154,16 +156,49 @@ const programEndpoints = async (event, context) => {
 
     program.endpoints = data;
     program.save(err => {
-      if (err) return Object(_libs_response_lib__WEBPACK_IMPORTED_MODULE_3__["failure"])({
+      if (err) return Object(_libs_response_lib__WEBPACK_IMPORTED_MODULE_4__["failure"])({
         status: false,
         body: err
       });
       console.log('Endpoint updated successfully to Program');
     });
-    return Object(_libs_response_lib__WEBPACK_IMPORTED_MODULE_3__["success"])(program);
+    return Object(_libs_response_lib__WEBPACK_IMPORTED_MODULE_4__["success"])(program);
   } catch (err) {
     console.log('Error getting Program:', err);
-    return Object(_libs_response_lib__WEBPACK_IMPORTED_MODULE_3__["failure"])({
+    return Object(_libs_response_lib__WEBPACK_IMPORTED_MODULE_4__["failure"])({
+      status: false
+    });
+  }
+};
+const programDomain = async (event, context) => {
+  context.callbackWaitsForEmptyEventLoop = false;
+  const programId = event.pathParameters.program_id;
+  const data = JSON.parse(event.body);
+
+  try {
+    await Object(_db__WEBPACK_IMPORTED_MODULE_1__["default"])();
+    let program;
+    program = await _models_Domain__WEBPACK_IMPORTED_MODULE_3__["default"].findById(programId);
+
+    if (!program) {
+      throw new Error('There is no Program found with ID:', programId);
+    }
+
+    program.title = data.name_value || 'N/A';
+    program.domain = data.domain_value || 'N/A';
+    program.description = data.description_value || 'N/A';
+    program.avatar = data.avatar_src || 'N/A';
+    program.save(err => {
+      if (err) return Object(_libs_response_lib__WEBPACK_IMPORTED_MODULE_4__["failure"])({
+        status: false,
+        body: err
+      });
+      console.log('Program updated successfully');
+    });
+    return Object(_libs_response_lib__WEBPACK_IMPORTED_MODULE_4__["success"])(program);
+  } catch (err) {
+    console.log('Error getting Program:', err);
+    return Object(_libs_response_lib__WEBPACK_IMPORTED_MODULE_4__["failure"])({
       status: false
     });
   }
@@ -281,6 +316,41 @@ const buildQueryObj = data => {
 
 /***/ }),
 
+/***/ "../../../models/Domain.js":
+/*!*******************************************************************************!*\
+  !*** /Users/admin/Code/work/repos/BlueKeel/API/programs-api/models/Domain.js ***!
+  \*******************************************************************************/
+/*! exports provided: default */
+/***/ (function(module, __webpack_exports__, __webpack_require__) {
+
+"use strict";
+__webpack_require__.r(__webpack_exports__);
+/* harmony import */ var source_map_support_register__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! source-map-support/register */ "../../source-map-support/register.js");
+/* harmony import */ var source_map_support_register__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(source_map_support_register__WEBPACK_IMPORTED_MODULE_0__);
+
+
+const mongoose = __webpack_require__(/*! mongoose */ "../../mongoose/index.js");
+
+const DomainSchema = new mongoose.Schema({
+  title: String,
+  domain: String,
+  description: String,
+  avatar: String,
+  created: {
+    type: Date,
+    default: Date.now,
+    required: true
+  },
+  modified: {
+    type: Date,
+    default: Date.now,
+    required: true
+  }
+});
+/* harmony default export */ __webpack_exports__["default"] = (mongoose.model('Domain', DomainSchema));
+
+/***/ }),
+
 /***/ "../../../models/Program.js":
 /*!********************************************************************************!*\
   !*** /Users/admin/Code/work/repos/BlueKeel/API/programs-api/models/Program.js ***!
@@ -313,6 +383,7 @@ const ProgramSchema = new mongoose.Schema({
   domain: String,
   vars: VarObj,
   endpoints: [{
+    name: String,
     url: String,
     usage: Number
   }],

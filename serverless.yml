@@ -76,6 +76,13 @@ functions:
           path: api/program/all_domains
           method: get
           cors: true
+  getListByDomain:
+    handler: api/read.getListByDomain
+    events:
+      - http:
+          path: api/program/list_by_domain
+          method: post
+          cors: true
 # UPDATE
   updateEndpoints:
     handler: api/update.programEndpoints
@@ -89,6 +96,13 @@ functions:
     events:
       - http:
           path: api/program/{program_id}/update_url
+          method: put
+          cors: true
+  updateProgramDomain:
+    handler: api/update.programDomain
+    events:
+      - http:
+          path: api/program/{program_id}/update_domain
           method: put
           cors: true
 # DELETE

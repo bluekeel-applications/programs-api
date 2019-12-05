@@ -28,7 +28,7 @@ export async function getAllDomains(context) {
         await connectToDatabase();
         const domains = await Domain.find({
             domain: { $exists: true }
-        }, 'title domain description avatar');
+        }, 'title pid domain description avatar');
 
         return success(domains);
     } catch (err) {

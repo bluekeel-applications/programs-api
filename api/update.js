@@ -65,6 +65,7 @@ export const programDomain = async(event, context) => {
             throw new Error('There is no Program found with ID:', programId);
         }
         program.title = data.name_value || 'N/A';
+        program.pid = data.pid_value || 1;
         program.domain = data.domain_value || 'N/A';
         program.description = data.description_value || 'N/A';
         program.avatar = data.avatar_src || 'N/A';

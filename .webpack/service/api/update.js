@@ -185,6 +185,7 @@ const programDomain = async (event, context) => {
     }
 
     program.title = data.name_value || 'N/A';
+    program.pid = data.pid_value || 1;
     program.domain = data.domain_value || 'N/A';
     program.description = data.description_value || 'N/A';
     program.avatar = data.avatar_src || 'N/A';
@@ -333,6 +334,7 @@ const mongoose = __webpack_require__(/*! mongoose */ "../../mongoose/index.js");
 
 const DomainSchema = new mongoose.Schema({
   title: String,
+  pid: Number,
   domain: String,
   description: String,
   avatar: String,

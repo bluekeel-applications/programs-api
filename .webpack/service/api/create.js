@@ -309,6 +309,7 @@ const mongoose = __webpack_require__(/*! mongoose */ "../../mongoose/index.js");
 
 const DomainSchema = new mongoose.Schema({
   title: String,
+  pid: Number,
   domain: String,
   description: String,
   avatar: String,

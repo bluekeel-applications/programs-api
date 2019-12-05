@@ -2,6 +2,7 @@ const mongoose = require('mongoose');
 
 const DomainSchema = new mongoose.Schema({
     title: String,
+    pid: Number,
     domain: String,
     description: String,
     avatar: String,

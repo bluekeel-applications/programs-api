@@ -7,8 +7,9 @@ const DomainSchema = new mongoose.Schema({
     description: String,
     avatar: String,
     accepts: [{
-        type: String,
-        avatar: String
+        title: String,
+        avatar: [String],
+        value: String
     }],
     created: {
         type: Date,

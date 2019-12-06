@@ -70,6 +70,7 @@ export const programDomain = async(event, context) => {
         program.domain = data.domain_value || 'N/A';
         program.description = data.description_value || 'N/A';
         program.avatar = data.avatar_src || 'N/A';
+        program.accepts = data.accepts || [];
         program.save((err) => {
             if (err) return failure({ status: false,body: err });
             console.log('Program updated successfully');

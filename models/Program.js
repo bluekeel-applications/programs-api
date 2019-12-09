@@ -16,6 +16,11 @@ const VarObj = new mongoose.Schema({
 
 const ProgramSchema = new mongoose.Schema({
     domain: String,
+    pid: {
+        type: Number,
+        default: 0,
+        required: true
+    },
     vars: VarObj,
     endpoints: [{
         name: String,

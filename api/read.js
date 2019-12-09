@@ -55,18 +55,17 @@ export async function getOneProgram(event, context) {
     }
 };
 
-export async function getListByDomain(event, context) {
+export async function getBasicByPid(event, context) {
     context.callbackWaitsForEmptyEventLoop = false;
-    const reqData = JSON.parse(event.body);
-    const domainName = reqData.domain;
+    const reqPid = event.pathParameters.pid;
     try {
         await connectToDatabase();
         const programs = await Program.find({
-            domain: domainName
-        });
+            pid: reqPid
+        }, '_id click_count vars endpoints');
         return success(programs);
     } catch (err) {
-        console.log('Error getting list by:', err);
+        console.log('Error getting vars by pid:', err);
         return failure({
             status: false
         });

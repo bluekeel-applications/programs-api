@@ -1,23 +1,3 @@
-// export function updateBody(key_name, data) {
-//     switch (key_name) {
-//         case "CONSENT":
-//             return {
-//                 optin: data,
-//                     modified: new Date()
-//             };
-//         case "APPROVAL":
-//             return {
-//                 approval: data,
-//                     modified: new Date()
-//             };
-//         case "CHECKOUT":
-//             return {
-//                 checkout: data,
-//                     modified: new Date()
-//             };
-//     }
-// }
-
 export function success(body) {
     return buildResponse(200, body);
 };
@@ -40,6 +20,7 @@ function buildResponse(statusCode, body) {
 export const buildQueryObj = (data) => {
     return {
         domain: data.domain,
+        pid: data.pid,
         vars: {
             media_type: data.vars.media_type,
             vertical: data.vars.vertical,

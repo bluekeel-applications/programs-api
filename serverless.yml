@@ -76,12 +76,12 @@ functions:
           path: api/program/all_domains
           method: get
           cors: true
-  getListByDomain:
-    handler: api/read.getListByDomain
+  getBasicByPid:
+    handler: api/read.getBasicByPid
     events:
       - http:
-          path: api/program/list_by_domain
-          method: post
+          path: api/program/basic/{pid}
+          method: get
           cors: true
 # UPDATE
   updateEndpoints:

@@ -80,7 +80,7 @@ functions:
     handler: api/read.getByPid
     events:
       - http:
-          path: api/program/{pid}
+          path: api/program/info/{pid}
           method: get
           cors: true
 # UPDATE
@@ -88,21 +88,21 @@ functions:
     handler: api/update.programEndpoints
     events:
       - http:
-          path: api/program/{program_id}/update_endpoints
+          path: api/program/update_endpoints/{program_id}
           method: put
           cors: true
   updateEndpoint:
     handler: api/update.endpoint
     events:
       - http:
-          path: api/program/{program_id}/update_one
+          path: api/program/update_one/{program_id}
           method: put
           cors: true
   updateProgramDomain:
     handler: api/update.programDomain
     events:
       - http:
-          path: api/program/{program_id}/update_domain
+          path: api/program/update_domain/{program_id}
           method: put
           cors: true
 # DELETE

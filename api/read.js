@@ -2,7 +2,7 @@ import connectToDatabase from '../db';
 import Program from '../models/Program';
 import Domain from '../models/Domain';
 
-import { success, failure, buildQueryObj } from "../libs/response-lib";
+import { success, failure } from "../libs/response-lib";
 
 
 export async function getAllEndpoints(context) {
@@ -42,11 +42,20 @@ export async function getAllDomains(context) {
 export async function getOneProgram(event, context) {
     context.callbackWaitsForEmptyEventLoop = false;
     const data = JSON.parse(event.body);
-
     try {
         await connectToDatabase();
-        let queryObj = buildQueryObj(data);
-        const program = await Program.findOne(queryObj, '_id endpoints click_count');
+        const program = await Program.find({
+            pid: data.pid,
+            vars: {
+                vertical: data.vars.vertical,
+                loan_type: data.vars.loan_type,
+                debt_type: data.vars.debt_type,
+                debt_amount: data.vars.debt_amount,
+                checking_optin: data.vars.checking_optin,
+                debt_optin: data.vars.debt_optin,
+                email_optin: data.vars.email_optin
+            }
+        }, '_id click_count endpoints');
         return success(program);
 
     } catch (err) {

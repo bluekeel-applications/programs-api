@@ -22,7 +22,6 @@ export const buildQueryObj = (data) => {
         domain: data.domain,
         pid: data.pid,
         vars: {
-            media_type: data.vars.media_type,
             vertical: data.vars.vertical,
             loan_type: data.vars.loan_type,
             debt_type: data.vars.debt_type,

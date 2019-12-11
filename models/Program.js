@@ -1,7 +1,6 @@
 const mongoose = require('mongoose');
 
 const VarObj = new mongoose.Schema({
-    media_type: String,
     vertical: String,
     loan_type: String,
     debt_type: String,

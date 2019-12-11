@@ -55,14 +55,14 @@ export async function getOneProgram(event, context) {
     }
 };
 
-export async function getBasicByPid(event, context) {
+export async function getByPid(event, context) {
     context.callbackWaitsForEmptyEventLoop = false;
     const reqPid = event.pathParameters.pid;
     try {
         await connectToDatabase();
         const programs = await Program.find({
             pid: reqPid
-        }, '_id click_count vars endpoints');
+        }, '_id domain pid click_count vars endpoints');
         return success(programs);
     } catch (err) {
         console.log('Error getting vars by pid:', err);

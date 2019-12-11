@@ -76,11 +76,11 @@ functions:
           path: api/program/all_domains
           method: get
           cors: true
-  getBasicByPid:
-    handler: api/read.getBasicByPid
+  getByPid:
+    handler: api/read.getByPid
     events:
       - http:
-          path: api/program/basic/{pid}
+          path: api/program/{pid}
           method: get
           cors: true
 # UPDATE

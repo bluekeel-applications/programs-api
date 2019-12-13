@@ -26,8 +26,8 @@ custom:
 provider:
   name: aws
   runtime: nodejs10.x
-  memorySize: 128
   timeout: 10
+  versionFunctions: false
   stage: dev
   region: us-east-1
 

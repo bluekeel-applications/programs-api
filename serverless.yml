@@ -83,6 +83,13 @@ functions:
           path: api/program/info/{pid}
           method: get
           cors: true
+  getByPidVertical:
+    handler: api/read.getByPidVertical
+    events:
+      - http:
+          path: api/program/info/{pid}/{vertical}
+          method: get
+          cors: true
 # UPDATE
   updateEndpoints:
     handler: api/update.programEndpoints

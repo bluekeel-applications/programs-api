@@ -80,3 +80,22 @@ export async function getByPid(event, context) {
         });
     }
 };
+
+export async function getByPidVertical(event, context) {
+    context.callbackWaitsForEmptyEventLoop = false;
+    const reqPid = event.pathParameters.pid;
+    const reqVertical = event.pathParameters.vertical;
+    try {
+        await connectToDatabase();
+        const programs = await Program.find({
+            pid: reqPid,
+            'vars.vertical': reqVertical
+        }, '_id domain pid click_count vars endpoints');
+        return success(programs);
+    } catch (err) {
+        console.log('Error getting vars by pid:', err);
+        return failure({
+            status: false
+        });
+    }
+};

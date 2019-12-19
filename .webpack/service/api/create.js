@@ -131,21 +131,20 @@ const newProgram = async (event, context) => {
 
   try {
     await Object(_db__WEBPACK_IMPORTED_MODULE_1__["default"])();
-    let program = await _models_Program__WEBPACK_IMPORTED_MODULE_2__["default"].findOne(queryObj);
+    let program = await _models_Program__WEBPACK_IMPORTED_MODULE_2__["default"].findOneAndUpdate(queryObj, data, {
+      new: true,
+      upsert: true,
+      setDefaultsOnInsert: true
+    }); // if(!program) {
+    // const response = await Program.create(data);
+    // return success(response);
+    // }
+    // program = data;
+    // program.save((err) => {
+    //     if (err) return failure({ status: false,body: err });
+    //     console.log('Program Endpoint updated successfully for:', data.name);
+    // });
 
-    if (!program) {
-      const response = await _models_Program__WEBPACK_IMPORTED_MODULE_2__["default"].create(data);
-      return Object(_libs_response_lib__WEBPACK_IMPORTED_MODULE_4__["success"])(response);
-    }
-
-    program = data;
-    program.save(err => {
-      if (err) return Object(_libs_response_lib__WEBPACK_IMPORTED_MODULE_4__["failure"])({
-        status: false,
-        body: err
-      });
-      console.log('Program Endpoint updated successfully for:', data.name);
-    });
     return Object(_libs_response_lib__WEBPACK_IMPORTED_MODULE_4__["success"])(program);
   } catch (err) {
     console.log('Error creating new Program:', err);

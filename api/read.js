@@ -91,7 +91,9 @@ export async function getByPidVertical(event, context) {
             pid: reqPid,
             'vars.vertical': reqVertical
         }, '_id domain pid click_count vars endpoints');
+        console.log('programs:', programs);
         return success(programs);
+
     } catch (err) {
         console.log('Error getting vars by pid:', err);
         return failure({

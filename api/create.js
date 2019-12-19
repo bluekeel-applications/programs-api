@@ -25,15 +25,10 @@ export const newProgram = async (event, context) => {
     let queryObj = buildQueryObj(data);
     try {
         await connectToDatabase();
-        let program = await Program.findOne(queryObj);
-        if(!program) {
-            const response = await Program.create(data);
-            return success(response);
-        }
-        program = data;
-        program.save((err) => {
-            if (err) return failure({ status: false,body: err });
-            console.log('Program Endpoint updated successfully for:', data.name);
+        let program = await Program.findOneAndUpdate(queryObj, data, {
+            new: true,
+            upsert: true,
+            setDefaultsOnInsert: true
         });
         return success(program);
 

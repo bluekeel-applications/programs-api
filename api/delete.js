@@ -41,3 +41,20 @@ export const removeEndpoint = async(event, context) => {
         return failure({ status: false });
     }
 };
+
+export const removeCampaign = async(event, context) => {
+    context.callbackWaitsForEmptyEventLoop = false;
+    const campaignVars = JSON.parse(event.body);
+    let queryObj = buildQueryObj(campaignVars);
+    try {
+        await connectToDatabase();
+        let program = await Program.findOneAndDelete(queryObj);
+        return success(program);
+
+    } catch (err) {
+        console.log('Error creating new Program:', err);
+        return failure({
+            status: false
+        });
+    }
+};

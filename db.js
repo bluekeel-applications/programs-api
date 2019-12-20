@@ -13,7 +13,9 @@ const connectToDatabase = async () => {
   const db = await mongoose.connect(process.env.DB_CONNECTION_STRING, {
     useUnifiedTopology: true,
     useNewUrlParser: true,
-    useFindAndModify: false
+    useFindAndModify: false,
+    bufferCommands: false,
+    bufferMaxEntries: 0
   });
   isConnected = db.connections[0].readyState;
 };

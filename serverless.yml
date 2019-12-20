@@ -127,3 +127,10 @@ functions:
           path: api/program/remove/{program_id}
           method: delete
           cors: true
+  deleteCampaign:
+    handler: api/delete.removeCampaign
+    events:
+      - http:
+          path: api/program/remove/campaign
+          method: delete
+          cors: true

@@ -86,12 +86,16 @@ export async function getByPidVertical(event, context) {
     const reqVertical = event.pathParameters.vertical;
     try {
         await connectToDatabase();
-        const programs = await Program.find({
-            pid: Number(reqPid),
-            'vars.vertical': reqVertical
+        const programs = await Program.find({ pid: Number(reqPid) });
+        const programVerticals = programs.map((program) => {
+            if(program.vars.vertical === reqVertical) {
+                return program;
+            };
         });
-        console.log('found:', programs);
-        return success(programs);
+        const filteredProgramVerticals = programVerticals.filter((item) => {
+            return item != null;
+        });
+        return success(filteredProgramVerticals);
     } catch (err) {
         console.log('Error getting vars by pid:', err);
         return failure(err);

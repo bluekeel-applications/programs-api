@@ -202,11 +202,19 @@ async function getByPidVertical(event, context) {
   try {
     await Object(_db__WEBPACK_IMPORTED_MODULE_1__["default"])();
     const programs = await _models_Program__WEBPACK_IMPORTED_MODULE_2__["default"].find({
-      pid: Number(reqPid),
-      'vars.vertical': reqVertical
+      pid: Number(reqPid)
     });
-    console.log('found:', programs);
-    return Object(_libs_response_lib__WEBPACK_IMPORTED_MODULE_4__["success"])(programs);
+    const programVerticals = programs.map(program => {
+      if (program.vars.vertical === reqVertical) {
+        return program;
+      }
+
+      ;
+    });
+    const filteredProgramVerticals = programVerticals.filter(item => {
+      return item != null;
+    });
+    return Object(_libs_response_lib__WEBPACK_IMPORTED_MODULE_4__["success"])(filteredProgramVerticals);
   } catch (err) {
     console.log('Error getting vars by pid:', err);
     return Object(_libs_response_lib__WEBPACK_IMPORTED_MODULE_4__["failure"])(err);

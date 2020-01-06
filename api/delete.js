@@ -2,7 +2,7 @@ import connectToDatabase from '../db';
 import Program from '../models/Program';
 import Domain from '../models/Domain';
 
-import { success, failure } from "../libs/response-lib";
+import { success, buildQueryObj, failure } from '../libs/response-lib';
 
 export const removeProgram = async(event, context) => {
     context.callbackWaitsForEmptyEventLoop = false;

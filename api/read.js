@@ -88,7 +88,7 @@ export async function getByPidVertical(event, context) {
     try {
         await connectToDatabase();
         const programs = await Program.find({
-            pid: reqPid,
+            'pid': reqPid,
             'vars.vertical': reqVertical
         }, '_id domain pid click_count vars endpoints');
         console.log('programs:', programs);
@@ -96,8 +96,6 @@ export async function getByPidVertical(event, context) {
 
     } catch (err) {
         console.log('Error getting vars by pid:', err);
-        return failure({
-            status: false
-        });
+        return failure(err);
     }
 };

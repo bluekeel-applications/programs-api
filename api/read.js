@@ -88,7 +88,7 @@ export async function getByPidVertical(event, context) {
         await connectToDatabase();
         const programs = await Program.find({ pid: Number(reqPid) });
         const programVerticals = programs.map((program) => {
-            if(program.vars.vertical === reqVertical) {
+            if(program.vars.vertical === reqVertical && program.endpoints.length > 0) {
                 return program;
             };
         });

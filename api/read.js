@@ -4,7 +4,6 @@ import Domain from '../models/Domain';
 
 import { success, failure } from "../libs/response-lib";
 
-
 export async function getAllEndpoints(context) {
     context.callbackWaitsForEmptyEventLoop = false;
     try {
@@ -45,7 +44,7 @@ export async function getOneProgram(event, context) {
     try {
         await connectToDatabase();
         const program = await Program.find({
-            pid: data.pid,
+            pid: Number(data.pid),
             vars: {
                 vertical: data.vars.vertical,
                 loan_type: data.vars.loan_type,
@@ -70,7 +69,7 @@ export async function getByPid(event, context) {
     try {
         await connectToDatabase();
         const programs = await Program.find({
-            pid: reqPid
+            pid: Number(reqPid)
         }, '_id domain pid click_count vars endpoints');
         return success(programs);
     } catch (err) {
@@ -88,12 +87,11 @@ export async function getByPidVertical(event, context) {
     try {
         await connectToDatabase();
         const programs = await Program.find({
-            'pid': reqPid,
+            pid: Number(reqPid),
             'vars.vertical': reqVertical
-        }, '_id domain pid click_count vars endpoints');
-        console.log('programs:', programs);
+        });
+        console.log('found:', programs);
         return success(programs);
-
     } catch (err) {
         console.log('Error getting vars by pid:', err);
         return failure(err);

@@ -117,7 +117,7 @@ functions:
     handler: api/delete.removeProgram
     events:
       - http:
-          path: api/program/removeById/{program_id}
+          path: api/program/removeById/{program_id}/{pid}
           method: delete
           cors: true
   deleteEndpoint:

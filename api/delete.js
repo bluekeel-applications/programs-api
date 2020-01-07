@@ -7,11 +7,12 @@ import { success, buildQueryObj, failure } from '../libs/response-lib';
 export const removeProgram = async(event, context) => {
     context.callbackWaitsForEmptyEventLoop = false;
     const programId = event.pathParameters.program_id;
+    const pid = event.pathParameters.pid;
     try {
         await connectToDatabase();
-        const program = await Domain.findByIdAndDelete(programId);
+        const program = await Domain.findByIdAndDelete(programId);        
+        await Program.deleteMany({ pid: pid });
         return success(program);
-
     } catch (err) {
         console.log('Error deleting program:', err);
         return failure({ status: false });

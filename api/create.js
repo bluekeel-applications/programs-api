@@ -48,11 +48,10 @@ export const endpoint = async (event, context) => {
             name: data.new_endpoint.name,
             url: data.new_endpoint.url,
             jump: data.new_endpoint.jump || 'N/A',
-            usage: 0
+            usage: Number(data.new_endpoint.usage) || 0
         };
-        let program;
         //Check if program exists in DB; make one if not
-        program = await Program.findOne(queryObj, '_id endpoints click_count');
+        let program = await Program.findOne(queryObj, '_id endpoints click_count');
         if (!program) {
             const endpointField = {
                 endpoints: []
@@ -67,8 +66,14 @@ export const endpoint = async (event, context) => {
         //Update the list on the document
         program.endpoints = programEndpoints;
         //Save changes to document
-        const res = await program.save();
-        return success(res);
+        await program.save((err) => {
+            if (err) return failure({
+                status: false,
+                body: err
+            });
+            console.log('Endpoint updated successfully to Program');
+        });
+        return success(program);
 
     } catch (err) {
         console.log('Error getting Program:', err);

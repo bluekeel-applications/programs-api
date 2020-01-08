@@ -47,6 +47,7 @@ export const endpoint = async (event, context) => {
         let newEndpoint = {
             name: data.new_endpoint.name,
             url: data.new_endpoint.url,
+            jump: data.new_endpoint.jump || 'N/A',
             usage: 0
         };
         let program;

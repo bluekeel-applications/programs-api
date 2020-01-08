@@ -10,7 +10,7 @@ export const removeProgram = async(event, context) => {
     const pid = event.pathParameters.pid;
     try {
         await connectToDatabase();
-        const program = await Domain.findByIdAndDelete(programId);        
+        const program = await Domain.findByIdAndDelete(programId);
         await Program.deleteMany({ pid: pid });
         return success(program);
     } catch (err) {

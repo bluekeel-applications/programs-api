@@ -117,11 +117,9 @@ const removeProgram = async (event, context) => {
   try {
     await Object(_db__WEBPACK_IMPORTED_MODULE_1__["default"])();
     const program = await _models_Domain__WEBPACK_IMPORTED_MODULE_3__["default"].findByIdAndDelete(programId);
-    console.log('program:', program);
-    const programs = await _models_Program__WEBPACK_IMPORTED_MODULE_2__["default"].deleteMany({
+    await _models_Program__WEBPACK_IMPORTED_MODULE_2__["default"].deleteMany({
       pid: pid
     });
-    console.log('programs:', programs);
     return Object(_libs_response_lib__WEBPACK_IMPORTED_MODULE_4__["success"])(program);
   } catch (err) {
     console.log('Error deleting program:', err);
@@ -204,15 +202,35 @@ const connectToDatabase = async () => {
     return Promise.resolve();
   }
 
-  console.log('=> using new database connection');
-  const db = await mongoose.connect(process.env.DB_CONNECTION_STRING, {
-    useUnifiedTopology: true,
-    useNewUrlParser: true,
-    useFindAndModify: false,
-    bufferCommands: false,
-    bufferMaxEntries: 0
-  });
-  isConnected = db.connections[0].readyState;
+  try {
+    console.log('=> using new database connection');
+    const db = await mongoose.connect(process.env.DB_CONNECTION_STRING, {
+      useNewUrlParser: true,
+      useFindAndModify: false,
+      bufferCommands: false,
+      reconnectTries: Number.MAX_VALUE,
+      // Never stop trying to reconnect
+      reconnectInterval: 500,
+      // Reconnect every 500ms
+      poolSize: 10,
+      // Maintain up to 10 socket connections
+      // If not connected, return errors immediately rather than waiting for reconnect
+      bufferMaxEntries: 0,
+      connectTimeoutMS: 10000,
+      // Give up initial connection after 10 seconds
+      socketTimeoutMS: 45000,
+      // Close sockets after 45 seconds of inactivity
+      family: 4 // Use IPv4, skip trying IPv6
+
+    });
+    isConnected = db.connections[0].readyState;
+    db.connections[0].on('error', err => {
+      console.log('Error:', err);
+    });
+  } catch (error) {
+    console.log('error:', error);
+    return error;
+  }
 };
 
 /* harmony default export */ __webpack_exports__["default"] = (connectToDatabase);
@@ -352,6 +370,7 @@ const ProgramSchema = new mongoose.Schema({
   endpoints: [{
     name: String,
     url: String,
+    jump: String,
     usage: Number
   }],
   click_count: {

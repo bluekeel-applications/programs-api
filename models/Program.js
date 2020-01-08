@@ -24,6 +24,7 @@ const ProgramSchema = new mongoose.Schema({
     endpoints: [{
         name: String,
         url: String,
+        jump: String,
         usage: Number
     }],
     click_count: {

@@ -25,9 +25,10 @@ custom:
 
 provider:
   name: aws
-  runtime: nodejs10.x
-  timeout: 10
+  runtime: nodejs12.x
+  timeout: 6
   versionFunctions: false
+  endpointType: regional
   stage: dev
   region: us-east-1
 

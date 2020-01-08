@@ -16,8 +16,10 @@ export const endpoint = async(event, context) => {
         if (!program) {
             throw new Error('There is no Program found with ID:', programId);
         }
-        program.endpoints.id(endpointId).url = data.url;
-        program.endpoints.id(endpointId).name = data.name;
+        program.endpoints.id(endpointId).url = data.url || 'N/A';
+        program.endpoints.id(endpointId).name = data.name || 'N/A';
+        program.endpoints.id(endpointId).usage = data.usage || 0;
+        program.endpoints.id(endpointId).jump = data.jump || 'N/A';
         program.save((err) => {
             if (err) return failure({ status: false,body: err });
             console.log('Endpoint updated successfully for:', data.name);

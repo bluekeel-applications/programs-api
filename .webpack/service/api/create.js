@@ -154,6 +154,7 @@ const endpoint = async (event, context) => {
     let newEndpoint = {
       name: data.new_endpoint.name,
       url: data.new_endpoint.url,
+      jump: data.new_endpoint.jump || 'N/A',
       usage: 0
     };
     let program; //Check if program exists in DB; make one if not
@@ -211,15 +212,35 @@ const connectToDatabase = async () => {
     return Promise.resolve();
   }
 
-  console.log('=> using new database connection');
-  const db = await mongoose.connect(process.env.DB_CONNECTION_STRING, {
-    useUnifiedTopology: true,
-    useNewUrlParser: true,
-    useFindAndModify: false,
-    bufferCommands: false,
-    bufferMaxEntries: 0
-  });
-  isConnected = db.connections[0].readyState;
+  try {
+    console.log('=> using new database connection');
+    const db = await mongoose.connect(process.env.DB_CONNECTION_STRING, {
+      useNewUrlParser: true,
+      useFindAndModify: false,
+      bufferCommands: false,
+      reconnectTries: Number.MAX_VALUE,
+      // Never stop trying to reconnect
+      reconnectInterval: 500,
+      // Reconnect every 500ms
+      poolSize: 10,
+      // Maintain up to 10 socket connections
+      // If not connected, return errors immediately rather than waiting for reconnect
+      bufferMaxEntries: 0,
+      connectTimeoutMS: 10000,
+      // Give up initial connection after 10 seconds
+      socketTimeoutMS: 45000,
+      // Close sockets after 45 seconds of inactivity
+      family: 4 // Use IPv4, skip trying IPv6
+
+    });
+    isConnected = db.connections[0].readyState;
+    db.connections[0].on('error', err => {
+      console.log('Error:', err);
+    });
+  } catch (error) {
+    console.log('error:', error);
+    return error;
+  }
 };
 
 /* harmony default export */ __webpack_exports__["default"] = (connectToDatabase);
@@ -359,6 +380,7 @@ const ProgramSchema = new mongoose.Schema({
   endpoints: [{
     name: String,
     url: String,
+    jump: String,
     usage: Number
   }],
   click_count: {

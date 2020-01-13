@@ -63,6 +63,28 @@ export async function getOneProgram(event, context) {
     }
 };
 
+export async function getProgramOffers(event, context) {
+    context.callbackWaitsForEmptyEventLoop = false;
+    const data = JSON.parse(event.body);
+    try {
+        await connectToDatabase();
+        const program = await Program.find({
+            'vars.vertical': data.vertical,
+            'vars.loan_type': data.loan_type,
+            'vars.debt_type': data.debt_type,
+            'vars.debt_amount': data.debt_amount,
+            'vars.checking_optin': data.checking_optin,
+            'vars.debt_optin': data.debt_optin,
+            'vars.email_optin': data.email_optin
+        }, '_id click_count endpoints');
+        return success(program);
+
+    } catch (err) {
+        console.log('Error getting User by ID:', err);
+        return failure({status: false});
+    }
+};
+
 export async function getByPid(event, context) {
     context.callbackWaitsForEmptyEventLoop = false;
     const reqPid = event.pathParameters.pid;

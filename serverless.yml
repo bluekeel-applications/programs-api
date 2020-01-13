@@ -70,6 +70,13 @@ functions:
           path: api/program/endpoints
           method: any
           cors: true
+  getProgramOffers:
+    handler: api/read.getProgramOffers
+    events:
+      - http:
+          path: api/program/offers
+          method: any
+          cors: true
   getAllDomains:
     handler: api/read.getAllDomains
     events:

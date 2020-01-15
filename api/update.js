@@ -20,15 +20,17 @@ export const endpoint = async(event, context) => {
         program.endpoints.id(endpointId).name = data.name || 'N/A';
         program.endpoints.id(endpointId).usage = data.usage || 0;
         program.endpoints.id(endpointId).jump = data.jump || 'N/A';
+        program.endpoints.id(endpointId).offer_page = data.offer_page || 'wall';
+        program.endpoints.id(endpointId).four_button = data.four_button || ['N/A'];
         program.save((err) => {
-            if (err) return failure({ status: false,body: err });
+            if (err) return failure({ status: false, body: err });
             console.log('Endpoint updated successfully for:', data.name);
         });
         return success(program.endpoints);
 
     } catch (err) {
         console.log('Error updating endpoint:', err);
-        return failure({ status: false });
+        return failure({ status: false, body: err });
     }
 };
 
@@ -52,7 +54,7 @@ export const programEndpoints = async(event, context) => {
 
     } catch (err) {
         console.log('Error getting Program:', err);
-        return failure({ status: false });
+        return failure({ status: false, body: err });
     }
 };
 
@@ -81,7 +83,7 @@ export const programDomain = async(event, context) => {
 
     } catch (err) {
         console.log('Error getting Program:', err);
-        return failure({ status: false });
+        return failure({ status: false, body: err });
     }
 };
 

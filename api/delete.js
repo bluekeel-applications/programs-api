@@ -15,7 +15,7 @@ export const removeProgram = async(event, context) => {
         return success(program);
     } catch (err) {
         console.log('Error deleting program:', err);
-        return failure({ status: false });
+        return failure({ status: false, body: err });
     }
 };
 
@@ -39,7 +39,7 @@ export const removeEndpoint = async(event, context) => {
         return success(program);
     } catch (err) {
         console.log('Error deleting program endpoint:',endpointId, err);
-        return failure({ status: false });
+        return failure({ status: false, body: err });
     }
 };
 
@@ -55,7 +55,8 @@ export const removeCampaign = async(event, context) => {
     } catch (err) {
         console.log('Error creating new Program:', err);
         return failure({
-            status: false
+            status: false,
+            body: err
         });
     }
 };

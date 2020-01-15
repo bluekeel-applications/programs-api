@@ -34,21 +34,24 @@ export const newProgram = async (event, context) => {
 
     } catch (err) {
         console.log('Error creating new Program:', err);
-        return failure({ status: false });
+        return failure({ status: false, body: err });
     }
 };
 
 export const endpoint = async (event, context) => {
     context.callbackWaitsForEmptyEventLoop = false;
     const data = JSON.parse(event.body);
+    const { name, url, jump, usage, offer_page, four_button } = data.new_endpoint;
     try {
         await connectToDatabase();
         let queryObj = buildQueryObj(data);
         let newEndpoint = {
-            name: data.new_endpoint.name,
-            url: data.new_endpoint.url,
-            jump: data.new_endpoint.jump || 'N/A',
-            usage: Number(data.new_endpoint.usage) || 0
+            name,
+            url,
+            jump: jump || 'N/A',
+            usage: usage || 0,
+            offer_page: offer_page || 'wall',
+            four_button: four_button || ['N/A']
         };
         //Check if program exists in DB; make one if not
         let program = await Program.findOne(queryObj, '_id endpoints click_count');
@@ -78,7 +81,8 @@ export const endpoint = async (event, context) => {
     } catch (err) {
         console.log('Error getting Program:', err);
         return failure({
-            status: false
+            status: false,
+            body: err
         });
     }
 };

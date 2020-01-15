@@ -25,7 +25,9 @@ const ProgramSchema = new mongoose.Schema({
         name: String,
         url: String,
         jump: String,
-        usage: Number
+        usage: Number,
+        offer_page: String,
+        four_button: [String]
     }],
     click_count: {
         type: Number,

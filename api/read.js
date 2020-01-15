@@ -28,17 +28,18 @@ export async function getAllDomains(context) {
         const domains = await Domain.find({
             domain: { $exists: true }
         }, 'title pid domain description avatar accepts');
-
+        if(!domains) { throw new Error({ message: 'Error occurred getting program domains.' }); };
         return success(domains);
     } catch (err) {
         console.log('Error getting list of domains:', err);
         return failure({
-            status: false
+            status: false,
+            body: err
         });
     }
 };
 
-export async function getOneProgram(event, context, callback) {
+export async function getOneProgram(event, context) {
     context.callbackWaitsForEmptyEventLoop = false;
     const data = JSON.parse(event.body);
     try {
@@ -57,16 +58,17 @@ export async function getOneProgram(event, context, callback) {
         }, '_id click_count endpoints');
         if(!program) { throw new Error({ message: 'Error occurred getting program.' }); };
 
-        const response = success(program);
-        callback(null, response);
+        return success(program);
     } catch (err) {
         console.log('Error getting User by ID:', err);
-        const response = failure(err);
-        callback(null, response);
+        return failure({
+            status: false,
+            body: err
+        });
     }
 };
 
-export async function getProgramOffers(event, context, callback) {
+export async function getProgramOffers(event, context) {
     context.callbackWaitsForEmptyEventLoop = false;
     const data = JSON.parse(event.body);
     try {
@@ -81,13 +83,13 @@ export async function getProgramOffers(event, context, callback) {
             'vars.email_optin': data.email_optin
         }, '_id click_count endpoints');
         if(!program) { throw new Error({ message: 'Error occurred getting program offers.' }); };
-
-        const response = success(program);
-        callback(null, response);
+        return success(program);
     } catch (err) {
-        console.log('Error getting User by ID:', err);
-        const response = failure(err);
-        callback(null, response);
+        console.log('Error getting Program Offers:', err);
+        return failure({
+            status: false,
+            body: err
+        });
     }
 };
 
@@ -99,10 +101,14 @@ export async function getByPid(event, context) {
         const programs = await Program.find({
             pid: Number(reqPid)
         }, '_id domain pid click_count vars endpoints');
+        if(!programs) { throw new Error({ message: 'Error occurred getting program by pid.' }); };
         return success(programs);
     } catch (err) {
         console.log('Error getting vars by pid:', err);
-        return failure(err);
+        return failure({
+            status: false,
+            body: err
+        });
     }
 };
 
@@ -113,6 +119,7 @@ export async function getByPidVertical(event, context) {
     try {
         await connectToDatabase();
         const programs = await Program.find({ pid: Number(reqPid) });
+        if(!programs) { throw new Error({ message: `Error occurred getting programs for pid: ${reqPid}` }); };
         const programVerticals = programs.map((program) => {
             if(program.vars.vertical === reqVertical && program.endpoints.length > 0) {
                 return program;
@@ -124,6 +131,9 @@ export async function getByPidVertical(event, context) {
         return success(filteredProgramVerticals);
     } catch (err) {
         console.log('Error getting vars by pid:', err);
-        return failure(err);
+        return failure({
+            status: false,
+            body: err
+        });
     }
 };

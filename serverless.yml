@@ -26,7 +26,7 @@ custom:
 provider:
   name: aws
   runtime: nodejs12.x
-  timeout: 6
+  timeout: 3
   versionFunctions: false
   endpointType: regional
   stage: dev
@@ -75,7 +75,7 @@ functions:
     events:
       - http:
           path: api/program/offers
-          method: any
+          method: post
           cors: true
   getAllDomains:
     handler: api/read.getAllDomains
@@ -118,6 +118,13 @@ functions:
     events:
       - http:
           path: api/program/update_domain/{program_id}
+          method: put
+          cors: true
+  addToProgramClickCount:
+    handler: api/update.programClickCount
+    events:
+      - http:
+          path: api/program/add_click/{program_id}
           method: put
           cors: true
 # DELETE

@@ -84,3 +84,25 @@ export const programDomain = async(event, context) => {
         return failure({ status: false });
     }
 };
+
+export const programClickCount = async(event, context) => {
+    context.callbackWaitsForEmptyEventLoop = false;
+    const programId = event.pathParameters.program_id;
+    try {
+        await connectToDatabase();
+        let program = await Program.findById(programId);
+        if (!program) {
+            throw new Error('There is no Program found with ID:', programId);
+        }
+        program.click_count += 1;
+        program.save((err) => {
+            if (err) return failure({ status: false, body: err });
+            console.log('Program updated successfully');
+        });
+        return success(program);
+
+    } catch (err) {
+        console.log('Error adding to Program click count:', err);
+        return failure({ status: false, body: err });
+    }
+};

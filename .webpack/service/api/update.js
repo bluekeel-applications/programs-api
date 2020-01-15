@@ -90,7 +90,7 @@
 /*!****************************************************************************!*\
   !*** /Users/admin/Code/work/repos/BlueKeel/API/programs-api/api/update.js ***!
   \****************************************************************************/
-/*! exports provided: endpoint, programEndpoints, programDomain */
+/*! exports provided: endpoint, programEndpoints, programDomain, programClickCount */
 /***/ (function(module, __webpack_exports__, __webpack_require__) {
 
 "use strict";
@@ -98,6 +98,7 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "endpoint", function() { return endpoint; });
 /* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "programEndpoints", function() { return programEndpoints; });
 /* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "programDomain", function() { return programDomain; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "programClickCount", function() { return programClickCount; });
 /* harmony import */ var source_map_support_register__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! source-map-support/register */ "../../source-map-support/register.js");
 /* harmony import */ var source_map_support_register__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(source_map_support_register__WEBPACK_IMPORTED_MODULE_0__);
 /* harmony import */ var _db__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ../db */ "../../../db.js");
@@ -208,6 +209,35 @@ const programDomain = async (event, context) => {
     });
   }
 };
+const programClickCount = async (event, context) => {
+  context.callbackWaitsForEmptyEventLoop = false;
+  const programId = event.pathParameters.program_id;
+
+  try {
+    await Object(_db__WEBPACK_IMPORTED_MODULE_1__["default"])();
+    let program = await _models_Program__WEBPACK_IMPORTED_MODULE_2__["default"].findById(programId);
+
+    if (!program) {
+      throw new Error('There is no Program found with ID:', programId);
+    }
+
+    program.click_count += 1;
+    program.save(err => {
+      if (err) return Object(_libs_response_lib__WEBPACK_IMPORTED_MODULE_4__["failure"])({
+        status: false,
+        body: err
+      });
+      console.log('Program updated successfully');
+    });
+    return Object(_libs_response_lib__WEBPACK_IMPORTED_MODULE_4__["success"])(program);
+  } catch (err) {
+    console.log('Error adding to Program click count:', err);
+    return Object(_libs_response_lib__WEBPACK_IMPORTED_MODULE_4__["failure"])({
+      status: false,
+      body: err
+    });
+  }
+};
 
 /***/ }),
 
@@ -239,21 +269,10 @@ const connectToDatabase = async () => {
     console.log('=> using new database connection');
     const db = await mongoose.connect(process.env.DB_CONNECTION_STRING, {
       useNewUrlParser: true,
-      useFindAndModify: false,
-      bufferCommands: false,
-      reconnectTries: Number.MAX_VALUE,
-      // Never stop trying to reconnect
-      reconnectInterval: 500,
-      // Reconnect every 500ms
-      poolSize: 10,
-      // Maintain up to 10 socket connections
       // If not connected, return errors immediately rather than waiting for reconnect
-      bufferMaxEntries: 0,
-      connectTimeoutMS: 10000,
-      // Give up initial connection after 10 seconds
-      socketTimeoutMS: 45000,
-      // Close sockets after 45 seconds of inactivity
-      family: 4 // Use IPv4, skip trying IPv6
+      bufferCommands: false,
+      // Disable mongoose buffering
+      bufferMaxEntries: 0 // and MongoDB driver buffering
 
     });
     isConnected = db.connections[0].readyState;
@@ -290,7 +309,11 @@ function success(body) {
 }
 ;
 function failure(body) {
-  return buildResponse(500, body);
+  let fullBody = {
+    status: false,
+    error: body
+  };
+  return buildResponse(500, fullBody);
 }
 ;
 
@@ -298,6 +321,8 @@ function buildResponse(statusCode, body) {
   return {
     statusCode: statusCode,
     headers: {
+      "Access-Control-Allow-Headers": "Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token",
+      "Access-Control-Allow-Methods": "DELETE,GET,HEAD,OPTIONS,PATCH,POST,PUT",
       "Access-Control-Allow-Origin": "*",
       "Access-Control-Allow-Credentials": true
     },
@@ -9183,7 +9208,7 @@ function mergeBatchResults(batch, bulkResult, err, result) {
   if (Array.isArray(result.writeErrors)) {
     for (let i = 0; i < result.writeErrors.length; i++) {
       const writeError = {
-        index: batch.originalIndexes[i],
+        index: batch.originalIndexes[result.writeErrors[i].index],
         code: result.writeErrors[i].code,
         errmsg: result.writeErrors[i].errmsg,
         op: batch.operations[result.writeErrors[i].index]
@@ -9457,11 +9482,15 @@ class BulkOperationBase {
 
     // Handle to the bson serializer, used to calculate running sizes
     const bson = topology.bson;
-
     // Set max byte size
     const isMaster = topology.lastIsMaster();
-    const maxBatchSizeBytes =
+
+    // If we have autoEncryption on, batch-splitting must be done on 2mb chunks, but single documents
+    // over 2mb are still allowed
+    const usingAutoEncryption = !!(topology.s.options && topology.s.options.autoEncrypter);
+    const maxBsonObjectSize =
       isMaster && isMaster.maxBsonObjectSize ? isMaster.maxBsonObjectSize : 1024 * 1024 * 16;
+    const maxBatchSizeBytes = usingAutoEncryption ? 1024 * 1024 * 2 : maxBsonObjectSize;
     const maxWriteBatchSize =
       isMaster && isMaster.maxWriteBatchSize ? isMaster.maxWriteBatchSize : 1000;
 
@@ -9513,8 +9542,9 @@ class BulkOperationBase {
       // Write concern
       writeConcern: writeConcern,
       // Max batch size options
-      maxBatchSizeBytes: maxBatchSizeBytes,
-      maxWriteBatchSize: maxWriteBatchSize,
+      maxBsonObjectSize,
+      maxBatchSizeBytes,
+      maxWriteBatchSize,
       maxKeySize,
       // Namespace
       namespace: namespace,
@@ -10002,8 +10032,8 @@ function addToOperationsList(bulkOperation, docType, document) {
   });
 
   // Throw error if the doc is bigger than the max BSON size
-  if (bsonSize >= bulkOperation.s.maxBatchSizeBytes)
-    throw toError('document is larger than the maximum size ' + bulkOperation.s.maxBatchSizeBytes);
+  if (bsonSize >= bulkOperation.s.maxBsonObjectSize)
+    throw toError('document is larger than the maximum size ' + bulkOperation.s.maxBsonObjectSize);
 
   // Create a new batch object if we don't have a current one
   if (bulkOperation.s.currentBatch == null)
@@ -10013,9 +10043,14 @@ function addToOperationsList(bulkOperation, docType, document) {
 
   // Check if we need to create a new batch
   if (
+    // New batch if we exceed the max batch op size
     bulkOperation.s.currentBatchSize + 1 >= bulkOperation.s.maxWriteBatchSize ||
-    bulkOperation.s.currentBatchSizeBytes + maxKeySize + bsonSize >=
-      bulkOperation.s.maxBatchSizeBytes ||
+    // New batch if we exceed the maxBatchSizeBytes. Only matters if batch already has a doc,
+    // since we can't sent an empty batch
+    (bulkOperation.s.currentBatchSize > 0 &&
+      bulkOperation.s.currentBatchSizeBytes + maxKeySize + bsonSize >=
+        bulkOperation.s.maxBatchSizeBytes) ||
+    // New batch if the new op does not have the same op type as the current batch
     bulkOperation.s.currentBatch.batchType !== docType
   ) {
     // Save the batch to the execution stack
@@ -10118,8 +10153,8 @@ function addToOperationsList(bulkOperation, docType, document) {
     ignoreUndefined: false
   });
   // Throw error if the doc is bigger than the max BSON size
-  if (bsonSize >= bulkOperation.s.maxBatchSizeBytes)
-    throw toError('document is larger than the maximum size ' + bulkOperation.s.maxBatchSizeBytes);
+  if (bsonSize >= bulkOperation.s.maxBsonObjectSize)
+    throw toError('document is larger than the maximum size ' + bulkOperation.s.maxBsonObjectSize);
   // Holds the current batch
   bulkOperation.s.currentBatch = null;
   // Get the right type of batch
@@ -10139,9 +10174,14 @@ function addToOperationsList(bulkOperation, docType, document) {
 
   // Check if we need to create a new batch
   if (
+    // New batch if we exceed the max batch op size
     bulkOperation.s.currentBatch.size + 1 >= bulkOperation.s.maxWriteBatchSize ||
-    bulkOperation.s.currentBatch.sizeBytes + maxKeySize + bsonSize >=
-      bulkOperation.s.maxBatchSizeBytes ||
+    // New batch if we exceed the maxBatchSizeBytes. Only matters if batch already has a doc,
+    // since we can't sent an empty batch
+    (bulkOperation.s.currentBatch.size > 0 &&
+      bulkOperation.s.currentBatch.sizeBytes + maxKeySize + bsonSize >=
+        bulkOperation.s.maxBatchSizeBytes) ||
+    // New batch if the new op does not have the same op type as the current batch
     bulkOperation.s.currentBatch.batchType !== docType
   ) {
     // Save the batch to the execution stack
@@ -10909,12 +10949,6 @@ const mergeKeys = ['ignoreUndefined'];
 /**
  * Create a new Collection instance (INTERNAL TYPE, do not instantiate directly)
  * @class
- * @property {string} collectionName Get the collection name.
- * @property {string} namespace Get the full collection namespace.
- * @property {object} writeConcern The current write concern values.
- * @property {object} readConcern The current read concern values.
- * @property {object} hint Get current index hint for collection.
- * @return {Collection} a Collection instance.
  */
 function Collection(db, topology, dbName, name, pkFactory, options) {
   checkCollectionName(name);
@@ -10988,6 +11022,12 @@ function Collection(db, topology, dbName, name, pkFactory, options) {
   };
 }
 
+/**
+ * The name of the database this collection belongs to
+ * @member {string} dbName
+ * @memberof Collection#
+ * @readonly
+ */
 Object.defineProperty(Collection.prototype, 'dbName', {
   enumerable: true,
   get: function() {
@@ -10995,6 +11035,12 @@ Object.defineProperty(Collection.prototype, 'dbName', {
   }
 });
 
+/**
+ * The name of this collection
+ * @member {string} collectionName
+ * @memberof Collection#
+ * @readonly
+ */
 Object.defineProperty(Collection.prototype, 'collectionName', {
   enumerable: true,
   get: function() {
@@ -11002,6 +11048,12 @@ Object.defineProperty(Collection.prototype, 'collectionName', {
   }
 });
 
+/**
+ * The namespace of this collection, in the format `${this.dbName}.${this.collectionName}`
+ * @member {string} namespace
+ * @memberof Collection#
+ * @readonly
+ */
 Object.defineProperty(Collection.prototype, 'namespace', {
   enumerable: true,
   get: function() {
@@ -11009,6 +11061,13 @@ Object.defineProperty(Collection.prototype, 'namespace', {
   }
 });
 
+/**
+ * The current readConcern of the collection. If not explicitly defined for
+ * this collection, will be inherited from the parent DB
+ * @member {ReadConcern} [readConcern]
+ * @memberof Collection#
+ * @readonly
+ */
 Object.defineProperty(Collection.prototype, 'readConcern', {
   enumerable: true,
   get: function() {
@@ -11019,6 +11078,13 @@ Object.defineProperty(Collection.prototype, 'readConcern', {
   }
 });
 
+/**
+ * The current readPreference of the collection. If not explicitly defined for
+ * this collection, will be inherited from the parent DB
+ * @member {ReadPreference} [readPreference]
+ * @memberof Collection#
+ * @readonly
+ */
 Object.defineProperty(Collection.prototype, 'readPreference', {
   enumerable: true,
   get: function() {
@@ -11030,6 +11096,13 @@ Object.defineProperty(Collection.prototype, 'readPreference', {
   }
 });
 
+/**
+ * The current writeConcern of the collection. If not explicitly defined for
+ * this collection, will be inherited from the parent DB
+ * @member {WriteConcern} [writeConcern]
+ * @memberof Collection#
+ * @readonly
+ */
 Object.defineProperty(Collection.prototype, 'writeConcern', {
   enumerable: true,
   get: function() {
@@ -11041,7 +11114,9 @@ Object.defineProperty(Collection.prototype, 'writeConcern', {
 });
 
 /**
- * @ignore
+ * The current index hint for the collection
+ * @member {object} [hint]
+ * @memberof Collection#
  */
 Object.defineProperty(Collection.prototype, 'hint', {
   enumerable: true,
@@ -11070,6 +11145,7 @@ const DEPRECATED_FIND_OPTIONS = ['maxScan', 'fields', 'snapshot'];
  * @param {boolean} [options.snapshot=false] DEPRECATED: Snapshot query.
  * @param {boolean} [options.timeout=false] Specify if the cursor can timeout.
  * @param {boolean} [options.tailable=false] Specify if the cursor is tailable.
+ * @param {boolean} [options.awaitData=false] Specify if the cursor is a a tailable-await cursor. Requires `tailable` to be true
  * @param {number} [options.batchSize=1000] Set the batchSize for the getMoreCommand when iterating over the query results.
  * @param {boolean} [options.returnKey=false] Only return the index key.
  * @param {number} [options.maxScan] DEPRECATED: Limit the number of items to scan.
@@ -11084,6 +11160,8 @@ const DEPRECATED_FIND_OPTIONS = ['maxScan', 'fields', 'snapshot'];
  * @param {(ReadPreference|string)} [options.readPreference] The preferred read preference (ReadPreference.PRIMARY, ReadPreference.PRIMARY_PREFERRED, ReadPreference.SECONDARY, ReadPreference.SECONDARY_PREFERRED, ReadPreference.NEAREST).
  * @param {boolean} [options.partial=false] Specify if the cursor should return partial results when querying against a sharded system
  * @param {number} [options.maxTimeMS] Number of milliseconds to wait before aborting the query.
+ * @param {number} [options.maxAwaitTimeMS] The maximum amount of time for the server to wait on new documents to satisfy a tailable cursor query. Requires `taiable` and `awaitData` to be true
+ * @param {boolean} [options.noCursorTimeout] The server normally times out idle cursors after an inactivity period (10 minutes) to prevent excess memory use. Set this option to prevent that.
  * @param {object} [options.collation] Specify collation (MongoDB 3.4 or higher) settings for update operation (see 3.4 documentation for available fields).
  * @param {ClientSession} [options.session] optional session to use for this operation
  * @throws {MongoError}
@@ -11261,12 +11339,14 @@ Collection.prototype.find = deprecateOptions(
  * @method
  * @param {object} doc Document to insert.
  * @param {object} [options] Optional settings.
+ * @param {boolean} [options.bypassDocumentValidation=false] Allow driver to bypass schema validation in MongoDB 3.2 or higher.
+ * @param {boolean} [options.forceServerObjectId=false] Force server to assign _id values instead of driver.
  * @param {(number|string)} [options.w] The write concern.
  * @param {number} [options.wtimeout] The write concern timeout.
  * @param {boolean} [options.j=false] Specify a journal write concern.
+ * @param {boolean} [options.checkKeys=true] If true, will throw if bson documents start with `$` or include a `.` in any key value
  * @param {boolean} [options.serializeFunctions=false] Serialize functions on any object.
- * @param {boolean} [options.forceServerObjectId=false] Force server to assign _id values instead of driver.
- * @param {boolean} [options.bypassDocumentValidation=false] Allow driver to bypass schema validation in MongoDB 3.2 or higher.
+ * @param {boolean} [options.ignoreUndefined=false] Specify if the BSON serializer should ignore undefined fields.
  * @param {ClientSession} [options.session] optional session to use for this operation
  * @param {Collection~insertOneWriteOpCallback} [callback] The command result callback
  * @return {Promise} returns Promise if no callback passed
@@ -11294,13 +11374,15 @@ Collection.prototype.insertOne = function(doc, options, callback) {
  * @method
  * @param {object[]} docs Documents to insert.
  * @param {object} [options] Optional settings.
+ * @param {boolean} [options.bypassDocumentValidation=false] Allow driver to bypass schema validation in MongoDB 3.2 or higher.
+ * @param {boolean} [options.ordered=true] If true, when an insert fails, don't execute the remaining writes. If false, continue with remaining inserts when one fails.
+ * @param {boolean} [options.forceServerObjectId=false] Force server to assign _id values instead of driver.
  * @param {(number|string)} [options.w] The write concern.
  * @param {number} [options.wtimeout] The write concern timeout.
  * @param {boolean} [options.j=false] Specify a journal write concern.
+ * @param {boolean} [options.checkKeys=true] If true, will throw if bson documents start with `$` or include a `.` in any key value
  * @param {boolean} [options.serializeFunctions=false] Serialize functions on any object.
- * @param {boolean} [options.forceServerObjectId=false] Force server to assign _id values instead of driver.
- * @param {boolean} [options.bypassDocumentValidation=false] Allow driver to bypass schema validation in MongoDB 3.2 or higher.
- * @param {boolean} [options.ordered=true] If true, when an insert fails, don't execute the remaining writes. If false, continue with remaining inserts when one fails.
+ * @param {boolean} [options.ignoreUndefined=false] Specify if the BSON serializer should ignore undefined fields.
  * @param {ClientSession} [options.session] optional session to use for this operation
  * @param {Collection~insertWriteOpCallback} [callback] The command result callback
  * @return {Promise} returns Promise if no callback passed
@@ -11359,13 +11441,15 @@ Collection.prototype.insertMany = function(docs, options, callback) {
  * @method
  * @param {object[]} operations Bulk operations to perform.
  * @param {object} [options] Optional settings.
+ * @param {boolean} [options.ordered=true] Execute write operation in ordered or unordered fashion.
+ * @param {boolean} [options.bypassDocumentValidation=false] Allow driver to bypass schema validation in MongoDB 3.2 or higher.
  * @param {object[]} [options.arrayFilters] Determines which array elements to modify for update operation in MongoDB 3.6 or higher.
  * @param {(number|string)} [options.w] The write concern.
  * @param {number} [options.wtimeout] The write concern timeout.
  * @param {boolean} [options.j=false] Specify a journal write concern.
+ * @param {boolean} [options.checkKeys=false] If true, will throw if bson documents start with `$` or include a `.` in any key value
  * @param {boolean} [options.serializeFunctions=false] Serialize functions on any object.
- * @param {boolean} [options.ordered=true] Execute write operation in ordered or unordered fashion.
- * @param {boolean} [options.bypassDocumentValidation=false] Allow driver to bypass schema validation in MongoDB 3.2 or higher.
+ * @param {boolean} [options.ignoreUndefined=false] Specify if the BSON serializer should ignore undefined fields.
  * @param {ClientSession} [options.session] optional session to use for this operation
  * @param {Collection~bulkWriteOpCallback} [callback] The command result callback
  * @return {Promise} returns Promise if no callback passed
@@ -11399,24 +11483,24 @@ Collection.prototype.bulkWrite = function(operations, options, callback) {
 
 /**
  * @typedef {Object} Collection~insertWriteOpResult
- * @property {Number} insertedCount The total amount of documents inserted.
+ * @property {number} insertedCount The total amount of documents inserted.
  * @property {object[]} ops All the documents inserted using insertOne/insertMany/replaceOne. Documents contain the _id field if forceServerObjectId == false for insertOne/insertMany
  * @property {Object.<Number, ObjectId>} insertedIds Map of the index of the inserted document to the id of the inserted document.
  * @property {object} connection The connection object used for the operation.
  * @property {object} result The raw command result object returned from MongoDB (content might vary by server version).
- * @property {Number} result.ok Is 1 if the command executed correctly.
- * @property {Number} result.n The total count of documents inserted.
+ * @property {number} result.ok Is 1 if the command executed correctly.
+ * @property {number} result.n The total count of documents inserted.
  */
 
 /**
  * @typedef {Object} Collection~insertOneWriteOpResult
- * @property {Number} insertedCount The total amount of documents inserted.
+ * @property {number} insertedCount The total amount of documents inserted.
  * @property {object[]} ops All the documents inserted using insertOne/insertMany/replaceOne. Documents contain the _id field if forceServerObjectId == false for insertOne/insertMany
  * @property {ObjectId} insertedId The driver generated ObjectId for the insert operation.
  * @property {object} connection The connection object used for the operation.
  * @property {object} result The raw command result object returned from MongoDB (content might vary by server version).
- * @property {Number} result.ok Is 1 if the command executed correctly.
- * @property {Number} result.n The total count of documents inserted.
+ * @property {number} result.ok Is 1 if the command executed correctly.
+ * @property {number} result.n The total count of documents inserted.
  */
 
 /**
@@ -11476,7 +11560,7 @@ Collection.prototype.insert = deprecate(function(docs, options, callback) {
  * @property {Number} upsertedCount The number of documents upserted.
  * @property {Object} upsertedId The upserted id.
  * @property {ObjectId} upsertedId._id The upserted _id returned from the server.
- * @property {Object} message
+ * @property {Object} message The raw msg response wrapped in an internal class
  * @property {object[]} [ops] In a response to {@link Collection#replaceOne replaceOne}, contains the new value of the document on the server. This is the same document that was originally passed in, and is only here for legacy purposes.
  */
 
@@ -11493,14 +11577,18 @@ Collection.prototype.insert = deprecate(function(docs, options, callback) {
  * @param {object} filter The Filter used to select the document to update
  * @param {object} update The update operations to be applied to the document
  * @param {object} [options] Optional settings.
- * @param {boolean} [options.upsert=false] Update operation is an upsert.
+ * @param {Array} [options.arrayFilters] optional list of array filters referenced in filtered positional operators
+ * @param {boolean} [options.bypassDocumentValidation=false] Allow driver to bypass schema validation in MongoDB 3.2 or higher.
+ * @param {object} [options.collation] Specify collation (MongoDB 3.4 or higher) settings for update operation (see 3.4 documentation for available fields).
+ * @param {object} [options.hint] An optional hint for query optimization. See the {@link https://docs.mongodb.com/manual/reference/command/update/#update-command-hint|update command} reference for more information.
+ * @param {boolean} [options.upsert=false] When true, creates a new document if no document matches the query..
  * @param {(number|string)} [options.w] The write concern.
  * @param {number} [options.wtimeout] The write concern timeout.
  * @param {boolean} [options.j=false] Specify a journal write concern.
- * @param {boolean} [options.bypassDocumentValidation=false] Allow driver to bypass schema validation in MongoDB 3.2 or higher.
- * @param {Array} [options.arrayFilters] optional list of array filters referenced in filtered positional operators
+ * @param {boolean} [options.checkKeys=false] If true, will throw if bson documents start with `$` or include a `.` in any key value
+ * @param {boolean} [options.serializeFunctions=false] Serialize functions on any object.
+ * @param {boolean} [options.ignoreUndefined=false] Specify if the BSON serializer should ignore undefined fields.
  * @param {ClientSession} [options.session] optional session to use for this operation
- * @param {object} [options.hint] An optional hint for query optimization. See the {@link https://docs.mongodb.com/manual/reference/command/update/#update-command-hint|update command} reference for more information.
  * @param {Collection~updateWriteOpCallback} [callback] The command result callback
  * @return {Promise} returns Promise if no callback passed
  */
@@ -11533,13 +11621,17 @@ Collection.prototype.updateOne = function(filter, update, options, callback) {
  * @param {object} filter The Filter used to select the document to replace
  * @param {object} doc The Document that replaces the matching document
  * @param {object} [options] Optional settings.
- * @param {boolean} [options.upsert=false] Update operation is an upsert.
+ * @param {boolean} [options.bypassDocumentValidation=false] Allow driver to bypass schema validation in MongoDB 3.2 or higher.
+ * @param {object} [options.collation] Specify collation (MongoDB 3.4 or higher) settings for update operation (see 3.4 documentation for available fields).
+ * @param {object} [options.hint] An optional hint for query optimization. See the {@link https://docs.mongodb.com/manual/reference/command/update/#update-command-hint|update command} reference for more information.
+ * @param {boolean} [options.upsert=false] When true, creates a new document if no document matches the query.
  * @param {(number|string)} [options.w] The write concern.
  * @param {number} [options.wtimeout] The write concern timeout.
  * @param {boolean} [options.j=false] Specify a journal write concern.
- * @param {boolean} [options.bypassDocumentValidation=false] Allow driver to bypass schema validation in MongoDB 3.2 or higher.
+ * @param {boolean} [options.checkKeys=false] If true, will throw if bson documents start with `$` or include a `.` in any key value
+ * @param {boolean} [options.serializeFunctions=false] Serialize functions on any object.
+ * @param {boolean} [options.ignoreUndefined=false] Specify if the BSON serializer should ignore undefined fields.
  * @param {ClientSession} [options.session] optional session to use for this operation
- * @param {object} [options.hint] An optional hint for query optimization. See the {@link https://docs.mongodb.com/manual/reference/command/update/#update-command-hint|update command} reference for more information.
  * @param {Collection~updateWriteOpCallback} [callback] The command result callback
  * @return {Promise<Collection~updateWriteOpResult>} returns Promise if no callback passed
  */
@@ -11564,13 +11656,18 @@ Collection.prototype.replaceOne = function(filter, doc, options, callback) {
  * @param {object} filter The Filter used to select the documents to update
  * @param {object} update The update operations to be applied to the documents
  * @param {object} [options] Optional settings.
- * @param {boolean} [options.upsert=false] Update operation is an upsert.
+ * @param {Array} [options.arrayFilters] optional list of array filters referenced in filtered positional operators
+ * @param {boolean} [options.bypassDocumentValidation=false] Allow driver to bypass schema validation in MongoDB 3.2 or higher.
+ * @param {object} [options.collation] Specify collation (MongoDB 3.4 or higher) settings for update operation (see 3.4 documentation for available fields).
+ * @param {object} [options.hint] An optional hint for query optimization. See the {@link https://docs.mongodb.com/manual/reference/command/update/#update-command-hint|update command} reference for more information.
+ * @param {boolean} [options.upsert=false] When true, creates a new document if no document matches the query..
  * @param {(number|string)} [options.w] The write concern.
  * @param {number} [options.wtimeout] The write concern timeout.
  * @param {boolean} [options.j=false] Specify a journal write concern.
- * @param {Array} [options.arrayFilters] optional list of array filters referenced in filtered positional operators
+ * @param {boolean} [options.checkKeys=false] If true, will throw if bson documents start with `$` or include a `.` in any key value
+ * @param {boolean} [options.serializeFunctions=false] Serialize functions on any object.
+ * @param {boolean} [options.ignoreUndefined=false] Specify if the BSON serializer should ignore undefined fields.
  * @param {ClientSession} [options.session] optional session to use for this operation
- * @param {object} [options.hint] An optional hint for query optimization. See the {@link https://docs.mongodb.com/manual/reference/command/update/#update-command-hint|update command} reference for more information.
  * @param {Collection~updateWriteOpCallback} [callback] The command result callback
  * @return {Promise<Collection~updateWriteOpResult>} returns Promise if no callback passed
  */
@@ -11647,7 +11744,7 @@ Collection.prototype.update = deprecate(function(selector, update, options, call
  */
 
 /**
- * The callback format for inserts
+ * The callback format for deletes
  * @callback Collection~deleteWriteOpCallback
  * @param {MongoError} error An error instance representing the error during the execution.
  * @param {Collection~deleteWriteOpResult} result The result object if the command was executed successfully.
@@ -11658,9 +11755,13 @@ Collection.prototype.update = deprecate(function(selector, update, options, call
  * @method
  * @param {object} filter The Filter used to select the document to remove
  * @param {object} [options] Optional settings.
+ * @param {object} [options.collation] Specify collation (MongoDB 3.4 or higher) settings for update operation (see 3.4 documentation for available fields).
  * @param {(number|string)} [options.w] The write concern.
  * @param {number} [options.wtimeout] The write concern timeout.
  * @param {boolean} [options.j=false] Specify a journal write concern.
+ * @param {boolean} [options.checkKeys=false] If true, will throw if bson documents start with `$` or include a `.` in any key value
+ * @param {boolean} [options.serializeFunctions=false] Serialize functions on any object.
+ * @param {boolean} [options.ignoreUndefined=false] Specify if the BSON serializer should ignore undefined fields.
  * @param {ClientSession} [options.session] optional session to use for this operation
  * @param {Collection~deleteWriteOpCallback} [callback] The command result callback
  * @return {Promise} returns Promise if no callback passed
@@ -11687,9 +11788,13 @@ Collection.prototype.removeOne = Collection.prototype.deleteOne;
  * @method
  * @param {object} filter The Filter used to select the documents to remove
  * @param {object} [options] Optional settings.
+ * @param {object} [options.collation] Specify collation (MongoDB 3.4 or higher) settings for update operation (see 3.4 documentation for available fields).
  * @param {(number|string)} [options.w] The write concern.
  * @param {number} [options.wtimeout] The write concern timeout.
  * @param {boolean} [options.j=false] Specify a journal write concern.
+ * @param {boolean} [options.checkKeys=false] If true, will throw if bson documents start with `$` or include a `.` in any key value
+ * @param {boolean} [options.serializeFunctions=false] Serialize functions on any object.
+ * @param {boolean} [options.ignoreUndefined=false] Specify if the BSON serializer should ignore undefined fields.
  * @param {ClientSession} [options.session] optional session to use for this operation
  * @param {Collection~deleteWriteOpCallback} [callback] The command result callback
  * @return {Promise} returns Promise if no callback passed
@@ -11716,6 +11821,7 @@ Collection.prototype.removeMany = Collection.prototype.deleteMany;
  * @method
  * @param {object} selector The selector for the update operation.
  * @param {object} [options] Optional settings.
+ * @param {object} [options.collation] Specify collation (MongoDB 3.4 or higher) settings for update operation (see 3.4 documentation for available fields).
  * @param {(number|string)} [options.w] The write concern.
  * @param {number} [options.wtimeout] The write concern timeout.
  * @param {boolean} [options.j=false] Specify a journal write concern.
@@ -12224,6 +12330,7 @@ Collection.prototype.indexInformation = function(options, callback) {
  * @method
  * @param {object} [query={}] The query for the count.
  * @param {object} [options] Optional settings.
+ * @param {object} [options.collation] Specify collation settings for operation. See {@link https://docs.mongodb.com/manual/reference/command/aggregate|aggregation documentation}.
  * @param {boolean} [options.limit] The limit of documents to count.
  * @param {boolean} [options.skip] The number of documents to skip for the count.
  * @param {string} [options.hint] An index name hint for the query.
@@ -12320,6 +12427,7 @@ Collection.prototype.countDocuments = function(query, options, callback) {
  * @param {object} [options] Optional settings.
  * @param {(ReadPreference|string)} [options.readPreference] The preferred read preference (ReadPreference.PRIMARY, ReadPreference.PRIMARY_PREFERRED, ReadPreference.SECONDARY, ReadPreference.SECONDARY_PREFERRED, ReadPreference.NEAREST).
  * @param {number} [options.maxTimeMS] Number of milliseconds to wait before aborting the query.
+ * @param {object} [options.collation] Specify collation settings for operation. See {@link https://docs.mongodb.com/manual/reference/command/aggregate|aggregation documentation}.
  * @param {ClientSession} [options.session] optional session to use for this operation
  * @param {Collection~resultCallback} [callback] The command result callback
  * @return {Promise} returns Promise if no callback passed
@@ -12392,9 +12500,13 @@ Collection.prototype.stats = function(options, callback) {
  * @method
  * @param {object} filter The Filter used to select the document to remove
  * @param {object} [options] Optional settings.
+ * @param {object} [options.collation] Specify collation (MongoDB 3.4 or higher) settings for update operation (see 3.4 documentation for available fields).
  * @param {object} [options.projection] Limits the fields to return for all matching documents.
  * @param {object} [options.sort] Determines which document the operation modifies if the query selects multiple documents.
  * @param {number} [options.maxTimeMS] The maximum amount of time to allow the query to run.
+ * @param {boolean} [options.checkKeys=false] If true, will throw if bson documents start with `$` or include a `.` in any key value
+ * @param {boolean} [options.serializeFunctions=false] Serialize functions on any object.
+ * @param {boolean} [options.ignoreUndefined=false] Specify if the BSON serializer should ignore undefined fields.
  * @param {ClientSession} [options.session] optional session to use for this operation
  * @param {Collection~findAndModifyCallback} [callback] The collection result callback
  * @return {Promise<Collection~findAndModifyWriteOpResultObject>} returns Promise if no callback passed
@@ -12419,11 +12531,16 @@ Collection.prototype.findOneAndDelete = function(filter, options, callback) {
  * @param {object} filter The Filter used to select the document to replace
  * @param {object} replacement The Document that replaces the matching document
  * @param {object} [options] Optional settings.
+ * @param {boolean} [options.bypassDocumentValidation=false] Allow driver to bypass schema validation in MongoDB 3.2 or higher.
+ * @param {object} [options.collation] Specify collation (MongoDB 3.4 or higher) settings for update operation (see 3.4 documentation for available fields).
+ * @param {number} [options.maxTimeMS] The maximum amount of time to allow the query to run.
  * @param {object} [options.projection] Limits the fields to return for all matching documents.
  * @param {object} [options.sort] Determines which document the operation modifies if the query selects multiple documents.
- * @param {number} [options.maxTimeMS] The maximum amount of time to allow the query to run.
  * @param {boolean} [options.upsert=false] Upsert the document if it does not exist.
  * @param {boolean} [options.returnOriginal=true] When false, returns the updated document rather than the original. The default is true.
+ * @param {boolean} [options.checkKeys=false] If true, will throw if bson documents start with `$` or include a `.` in any key value
+ * @param {boolean} [options.serializeFunctions=false] Serialize functions on any object.
+ * @param {boolean} [options.ignoreUndefined=false] Specify if the BSON serializer should ignore undefined fields.
  * @param {ClientSession} [options.session] optional session to use for this operation
  * @param {Collection~findAndModifyCallback} [callback] The collection result callback
  * @return {Promise<Collection~findAndModifyWriteOpResultObject>} returns Promise if no callback passed
@@ -12462,13 +12579,18 @@ Collection.prototype.findOneAndReplace = function(filter, replacement, options, 
  * @param {object} filter The Filter used to select the document to update
  * @param {object} update Update operations to be performed on the document
  * @param {object} [options] Optional settings.
+ * @param {Array} [options.arrayFilters] optional list of array filters referenced in filtered positional operators
+ * @param {boolean} [options.bypassDocumentValidation=false] Allow driver to bypass schema validation in MongoDB 3.2 or higher.
+ * @param {object} [options.collation] Specify collation (MongoDB 3.4 or higher) settings for update operation (see 3.4 documentation for available fields).
+ * @param {number} [options.maxTimeMS] The maximum amount of time to allow the query to run.
  * @param {object} [options.projection] Limits the fields to return for all matching documents.
  * @param {object} [options.sort] Determines which document the operation modifies if the query selects multiple documents.
- * @param {number} [options.maxTimeMS] The maximum amount of time to allow the query to run.
  * @param {boolean} [options.upsert=false] Upsert the document if it does not exist.
  * @param {boolean} [options.returnOriginal=true] When false, returns the updated document rather than the original. The default is true.
+ * @param {boolean} [options.checkKeys=false] If true, will throw if bson documents start with `$` or include a `.` in any key value
+ * @param {boolean} [options.serializeFunctions=false] Serialize functions on any object.
+ * @param {boolean} [options.ignoreUndefined=false] Specify if the BSON serializer should ignore undefined fields.
  * @param {ClientSession} [options.session] optional session to use for this operation
- * @param {Array} [options.arrayFilters] optional list of array filters referenced in filtered positional operators
  * @param {Collection~findAndModifyCallback} [callback] The collection result callback
  * @return {Promise<Collection~findAndModifyWriteOpResultObject>} returns Promise if no callback passed
  */
@@ -12580,11 +12702,13 @@ Collection.prototype.findAndRemove = deprecate(function(query, sort, options, ca
  * @param {object} [pipeline=[]] Array containing all the aggregation framework commands for the execution.
  * @param {object} [options] Optional settings.
  * @param {(ReadPreference|string)} [options.readPreference] The preferred read preference (ReadPreference.PRIMARY, ReadPreference.PRIMARY_PREFERRED, ReadPreference.SECONDARY, ReadPreference.SECONDARY_PREFERRED, ReadPreference.NEAREST).
+ * @param {number} [options.batchSize=1000] The number of documents to return per batch. See {@link https://docs.mongodb.com/manual/reference/command/aggregate|aggregation documentation}.
  * @param {object} [options.cursor] Return the query as cursor, on 2.6 > it returns as a real cursor on pre 2.6 it returns as an emulated cursor.
- * @param {number} [options.cursor.batchSize=1000] The number of documents to return per batch. See {@link https://docs.mongodb.com/manual/reference/command/aggregate|aggregation documentation}.
+ * @param {number} [options.cursor.batchSize=1000] Deprecated. Use `options.batchSize`
  * @param {boolean} [options.explain=false] Explain returns the aggregation execution plan (requires mongodb 2.6 >).
  * @param {boolean} [options.allowDiskUse=false] allowDiskUse lets the server know if it can use disk to store temporary results for the aggregation (requires mongodb 2.6 >).
  * @param {number} [options.maxTimeMS] maxTimeMS specifies a cumulative time limit in milliseconds for processing operations on the cursor. MongoDB interrupts the operation at the earliest following interrupt point.
+ * @param {number} [options.maxAwaitTimeMS] The maximum amount of time for the server to wait on new documents to satisfy a tailable cursor query.
  * @param {boolean} [options.bypassDocumentValidation=false] Allow driver to bypass schema validation in MongoDB 3.2 or higher.
  * @param {boolean} [options.raw=false] Return document results as raw BSON buffers.
  * @param {boolean} [options.promoteLongs=true] Promotes Long values to number if they fit inside the 53 bits resolution.
@@ -13928,7 +14052,6 @@ try {
 var parsePayload = function(payload) {
   var dict = {};
   var parts = payload.split(',');
-
   for (var i = 0; i < parts.length; i++) {
     var valueParts = parts[i].split('=');
     dict[valueParts[0]] = valueParts[1];
@@ -14014,6 +14137,23 @@ function HI(data, salt, iterations, cryptoMethod) {
   return saltedData;
 }
 
+function compareDigest(lhs, rhs) {
+  if (lhs.length !== rhs.length) {
+    return false;
+  }
+
+  if (typeof crypto.timingSafeEqual === 'function') {
+    return crypto.timingSafeEqual(lhs, rhs);
+  }
+
+  let result = 0;
+  for (let i = 0; i < lhs.length; i++) {
+    result |= lhs[i] ^ rhs[i];
+  }
+
+  return result === 0;
+}
+
 /**
  * Creates a new ScramSHA authentication mechanism
  * @class
@@ -14088,9 +14228,19 @@ class ScramSHA extends AuthProvider {
 
       const payload = Buffer.isBuffer(r.payload) ? new Binary(r.payload) : r.payload;
       const dict = parsePayload(payload.value());
+
       const iterations = parseInt(dict.i, 10);
+      if (iterations && iterations < 4096) {
+        callback(new MongoError(`Server returned an invalid iteration count ${iterations}`), false);
+        return;
+      }
+
       const salt = dict.s;
       const rnonce = dict.r;
+      if (rnonce.startsWith('nonce')) {
+        callback(new MongoError(`Server returned an invalid nonce: ${rnonce}`), false);
+        return;
+      }
 
       // Set up start of proof
       const withoutProof = `c=biws,r=${rnonce}`;
@@ -14101,18 +14251,17 @@ class ScramSHA extends AuthProvider {
         cryptoMethod
       );
 
-      if (iterations && iterations < 4096) {
-        const error = new MongoError(`Server returned an invalid iteration count ${iterations}`);
-        return callback(error, false);
-      }
-
       const clientKey = HMAC(cryptoMethod, saltedPassword, 'Client Key');
+      const serverKey = HMAC(cryptoMethod, saltedPassword, 'Server Key');
       const storedKey = H(cryptoMethod, clientKey);
       const authMessage = [firstBare, payload.value().toString('base64'), withoutProof].join(',');
 
       const clientSignature = HMAC(cryptoMethod, storedKey, authMessage);
       const clientProof = `p=${xor(clientKey, clientSignature)}`;
       const clientFinal = [withoutProof, clientProof].join(',');
+
+      const serverSignature = HMAC(cryptoMethod, serverKey, authMessage);
+
       const saslContinueCmd = {
         saslContinue: 1,
         conversationId: r.conversationId,
@@ -14120,6 +14269,17 @@ class ScramSHA extends AuthProvider {
       };
 
       sendAuthCommand(connection, `${db}.$cmd`, saslContinueCmd, (err, r) => {
+        if (err || (r && typeof r.ok === 'number' && r.ok === 0)) {
+          callback(err, r);
+          return;
+        }
+
+        const parsedResponse = parsePayload(r.payload.value());
+        if (!compareDigest(Buffer.from(parsedResponse.v, 'base64'), serverSignature)) {
+          callback(new MongoError('Server returned an invalid signature'));
+          return;
+        }
+
         if (!r || r.done !== false) {
           return callback(err, r);
         }
@@ -14417,7 +14577,8 @@ const extractCommandName = commandDoc => Object.keys(commandDoc)[0];
 const namespace = command => command.ns;
 const databaseName = command => command.ns.split('.')[0];
 const collectionName = command => command.ns.split('.')[1];
-const generateConnectionId = pool => `${pool.options.host}:${pool.options.port}`;
+const generateConnectionId = pool =>
+  pool.options ? `${pool.options.host}:${pool.options.port}` : pool.id;
 const maybeRedact = (commandName, result) => (SENSITIVE_COMMANDS.has(commandName) ? {} : result);
 
 const LEGACY_FIND_QUERY_MAP = {
@@ -14542,10 +14703,7 @@ const extractReply = (command, reply) => {
     };
   }
 
-  // in the event of a `noResponse` command, just return
-  if (reply === null) return reply;
-
-  return reply.result;
+  return reply && reply.result ? reply.result : reply;
 };
 
 /** An event indicating the start of a given command */
@@ -14567,11 +14725,11 @@ class CommandStartedEvent {
     }
 
     Object.assign(this, {
-      command: cmd,
+      connectionId: generateConnectionId(pool),
+      requestId: command.requestId,
       databaseName: databaseName(command),
       commandName,
-      requestId: command.requestId,
-      connectionId: generateConnectionId(pool)
+      command: cmd
     });
   }
 }
@@ -14591,11 +14749,11 @@ class CommandSucceededEvent {
     const commandName = extractCommandName(cmd);
 
     Object.assign(this, {
-      duration: calculateDurationInMs(started),
-      commandName,
-      reply: maybeRedact(commandName, extractReply(command, reply)),
+      connectionId: generateConnectionId(pool),
       requestId: command.requestId,
-      connectionId: generateConnectionId(pool)
+      commandName,
+      duration: calculateDurationInMs(started),
+      reply: maybeRedact(commandName, extractReply(command, reply))
     });
   }
 }
@@ -14615,11 +14773,11 @@ class CommandFailedEvent {
     const commandName = extractCommandName(cmd);
 
     Object.assign(this, {
-      duration: calculateDurationInMs(started),
-      commandName,
-      failure: maybeRedact(commandName, error),
+      connectionId: generateConnectionId(pool),
       requestId: command.requestId,
-      connectionId: generateConnectionId(pool)
+      commandName,
+      duration: calculateDurationInMs(started),
+      failure: maybeRedact(commandName, error)
     });
   }
 }
@@ -15224,40 +15382,25 @@ const MIN_SUPPORTED_WIRE_VERSION = WIRE_CONSTANTS.MIN_SUPPORTED_WIRE_VERSION;
 const MIN_SUPPORTED_SERVER_VERSION = WIRE_CONSTANTS.MIN_SUPPORTED_SERVER_VERSION;
 let AUTH_PROVIDERS;
 
-function connect(options, callback) {
+function connect(options, cancellationToken, callback) {
+  if (typeof cancellationToken === 'function') {
+    callback = cancellationToken;
+    cancellationToken = undefined;
+  }
+
   const ConnectionType = options && options.connectionType ? options.connectionType : Connection;
   if (AUTH_PROVIDERS == null) {
     AUTH_PROVIDERS = defaultAuthProviders(options.bson);
   }
 
-  if (options.family !== void 0) {
-    makeConnection(options.family, options, (err, socket) => {
-      if (err) {
-        callback(err, socket); // in the error case, `socket` is the originating error event name
-        return;
-      }
-
-      performInitialHandshake(new ConnectionType(socket, options), options, callback);
-    });
-
-    return;
-  }
-
-  return makeConnection(6, options, (err, ipv6Socket) => {
+  const family = options.family !== void 0 ? options.family : 0;
+  makeConnection(family, options, cancellationToken, (err, socket) => {
     if (err) {
-      makeConnection(0, options, (err, ipv4Socket) => {
-        if (err) {
-          callback(err, ipv4Socket); // in the error case, `ipv4Socket` is the originating error event name
-          return;
-        }
-
-        performInitialHandshake(new ConnectionType(ipv4Socket, options), options, callback);
-      });
-
+      callback(err, socket); // in the error case, `socket` is the originating error event name
       return;
     }
 
-    performInitialHandshake(new ConnectionType(ipv6Socket, options), options, callback);
+    performInitialHandshake(new ConnectionType(socket, options), options, callback);
   });
 }
 
@@ -15299,9 +15442,7 @@ function checkSupportedServer(ismaster, options) {
       return null;
     }
 
-    const message = `Server at ${options.host}:${options.port} reports minimum wire version ${
-      ismaster.minWireVersion
-    }, but this version of the Node.js Driver requires at most ${MAX_SUPPORTED_WIRE_VERSION} (MongoDB ${MAX_SUPPORTED_SERVER_VERSION})`;
+    const message = `Server at ${options.host}:${options.port} reports minimum wire version ${ismaster.minWireVersion}, but this version of the Node.js Driver requires at most ${MAX_SUPPORTED_WIRE_VERSION} (MongoDB ${MAX_SUPPORTED_SERVER_VERSION})`;
     return new MongoError(message);
   }
 
@@ -15448,7 +15589,8 @@ function parseSslOptions(family, options) {
   return result;
 }
 
-function makeConnection(family, options, _callback) {
+const SOCKET_ERROR_EVENTS = new Set(['error', 'close', 'timeout', 'parseError']);
+function makeConnection(family, options, cancellationToken, _callback) {
   const useSsl = typeof options.ssl === 'boolean' ? options.ssl : false;
   const keepAlive = typeof options.keepAlive === 'boolean' ? options.keepAlive : true;
   let keepAliveInitialDelay =
@@ -15469,6 +15611,7 @@ function makeConnection(family, options, _callback) {
     if (err && socket) {
       socket.destroy();
     }
+
     _callback(err, ret);
   };
 
@@ -15489,17 +15632,25 @@ function makeConnection(family, options, _callback) {
   socket.setTimeout(connectionTimeout);
   socket.setNoDelay(noDelay);
 
-  const errorEvents = ['error', 'close', 'timeout', 'parseError'];
+  let cancellationHandler;
   function errorHandler(eventName) {
     return err => {
-      errorEvents.forEach(event => socket.removeAllListeners(event));
+      SOCKET_ERROR_EVENTS.forEach(event => socket.removeAllListeners(event));
+      if (cancellationHandler) {
+        cancellationToken.removeListener('cancel', cancellationHandler);
+      }
+
       socket.removeListener('connect', connectHandler);
-      callback(connectionFailureError(eventName, err), eventName);
+      callback(connectionFailureError(eventName, err));
     };
   }
 
   function connectHandler() {
-    errorEvents.forEach(event => socket.removeAllListeners(event));
+    SOCKET_ERROR_EVENTS.forEach(event => socket.removeAllListeners(event));
+    if (cancellationHandler) {
+      cancellationToken.removeListener('cancel', cancellationHandler);
+    }
+
     if (socket.authorizationError && rejectUnauthorized) {
       return callback(socket.authorizationError);
     }
@@ -15508,15 +15659,22 @@ function makeConnection(family, options, _callback) {
     callback(null, socket);
   }
 
-  socket.once('error', errorHandler('error'));
-  socket.once('close', errorHandler('close'));
-  socket.once('timeout', errorHandler('timeout'));
-  socket.once('parseError', errorHandler('parseError'));
+  SOCKET_ERROR_EVENTS.forEach(event => socket.once(event, errorHandler(event)));
+  if (cancellationToken) {
+    cancellationHandler = errorHandler('cancel');
+    cancellationToken.once('cancel', cancellationHandler);
+  }
+
   socket.once('connect', connectHandler);
 }
 
 const CONNECTION_ERROR_EVENTS = ['error', 'close', 'timeout', 'parseError'];
 function runCommand(conn, ns, command, options, callback) {
+  if (typeof conn.command === 'function') {
+    conn.command(ns, command, options, callback);
+    return;
+  }
+
   if (typeof options === 'function') (callback = options), (options = {});
   const socketTimeout = typeof options.socketTimeout === 'number' ? options.socketTimeout : 360000;
   const bson = conn.options.bson;
@@ -15587,6 +15745,8 @@ function connectionFailureError(type, err) {
       return new MongoNetworkError(`connection timed out`);
     case 'close':
       return new MongoNetworkError(`connection closed`);
+    case 'cancel':
+      return new MongoNetworkError(`connection establishment was cancelled`);
     default:
       return new MongoNetworkError(`unknown network error`);
   }
@@ -15731,6 +15891,7 @@ class Connection extends EventEmitter {
     // Internal state
     this.writeStream = null;
     this.destroyed = false;
+    this.timedOut = false;
 
     // Create hash method
     const hash = crypto.createHash('sha1');
@@ -15801,6 +15962,20 @@ class Connection extends EventEmitter {
   }
 
   /**
+   * Flush all work Items on this connection
+   *
+   * @param {*} err The error to propagate to the flushed work items
+   */
+  flush(err) {
+    while (this.workItems.length > 0) {
+      const workItem = this.workItems.shift();
+      if (workItem.cb) {
+        workItem.cb(err);
+      }
+    }
+  }
+
+  /**
    * Destroy connection
    * @method
    */
@@ -15821,7 +15996,7 @@ class Connection extends EventEmitter {
       return;
     }
 
-    if (options.force) {
+    if (options.force || this.timedOut) {
       this.socket.destroy();
       this.destroyed = true;
       if (typeof callback === 'function') callback(null, null);
@@ -15941,6 +16116,7 @@ function timeoutHandler(conn) {
       conn.logger.debug(`connection ${conn.id} for [${conn.address}] timed out`);
     }
 
+    conn.timedOut = true;
     conn.emit(
       'timeout',
       new MongoNetworkError(`connection ${conn.id} to ${conn.address} timed out`),
@@ -16260,13 +16436,18 @@ var pid = process.pid;
 var currentLogger = null;
 
 /**
+ * @callback Logger~loggerCallback
+ * @param {string} msg message being logged
+ * @param {object} state an object containing more metadata about the logging message
+ */
+
+/**
  * Creates a new Logger instance
  * @class
  * @param {string} className The Class name associated with the logging instance
  * @param {object} [options=null] Optional settings.
- * @param {Function} [options.logger=null] Custom logger function;
+ * @param {Logger~loggerCallback} [options.logger=null] Custom logger function;
  * @param {string} [options.loggerLevel=error] Override default global log level.
- * @return {Logger} a Logger instance.
  */
 var Logger = function(className, options) {
   if (!(this instanceof Logger)) return new Logger(className, options);
@@ -16442,7 +16623,7 @@ Logger.reset = function() {
 /**
  * Get the current logger function
  * @method
- * @return {function}
+ * @return {Logger~loggerCallback}
  */
 Logger.currentLogger = function() {
   return currentLogger;
@@ -16451,7 +16632,7 @@ Logger.currentLogger = function() {
 /**
  * Set the current logger function
  * @method
- * @param {function} logger Logger function.
+ * @param {Logger~loggerCallback} logger Logger function.
  * @return {null}
  */
 Logger.setCurrentLogger = function(logger) {
@@ -16564,7 +16745,7 @@ class Msg {
     this.options = options || {};
 
     // Additional options
-    this.requestId = Msg.getRequestId();
+    this.requestId = options.requestId ? options.requestId : Msg.getRequestId();
 
     // Serialization option
     this.serializeFunctions =
@@ -16829,8 +17010,12 @@ var Pool = function(topology, options) {
   this.topology = topology;
 
   this.s = {
-    state: DISCONNECTED
+    state: DISCONNECTED,
+    cancellationToken: new EventEmitter()
   };
+
+  // we don't care how many connections are listening for cancellation
+  this.s.cancellationToken.setMaxListeners(Infinity);
 
   // Add the options
   this.options = Object.assign(
@@ -16989,20 +17174,24 @@ function connectionFailureHandler(pool, event, err, conn) {
     // Remove the connection
     removeConnection(pool, conn);
 
-    // Flush all work Items on this connection
-    while (conn.workItems.length > 0) {
-      const workItem = conn.workItems.shift();
-      if (workItem.cb) workItem.cb(err);
-    }
-
-    if (pool.state !== DRAINING && pool.options.legacyCompatMode === false) {
+    if (
+      pool.state !== DRAINING &&
+      pool.state !== DESTROYED &&
+      pool.options.legacyCompatMode === false
+    ) {
       // since an error/close/timeout means pool invalidation in a
       // pre-CMAP world, we will issue a custom `drain` event here to
       // signal that the server should be recycled
       stateTransition(pool, DRAINING);
       pool.emit('drain', err);
+
+      // wait to flush work items so this server isn't selected again immediately
+      process.nextTick(() => conn.flush(err));
       return;
     }
+
+    // flush remaining work items
+    conn.flush(err);
   }
 
   // Did we catch a timeout, increment the numberOfConsecutiveTimeouts
@@ -17064,9 +17253,7 @@ function attemptReconnect(pool, callback) {
       pool.destroy();
 
       const error = new MongoTimeoutError(
-        `failed to reconnect after ${pool.options.reconnectTries} attempts with interval ${
-          pool.options.reconnectInterval
-        } ms`,
+        `failed to reconnect after ${pool.options.reconnectTries} attempts with interval ${pool.options.reconnectInterval} ms`,
         pool.reconnectError
       );
 
@@ -17363,6 +17550,9 @@ Pool.prototype.unref = function() {
 function destroy(self, connections, options, callback) {
   stateTransition(self, DESTROYING);
 
+  // indicate that in-flight connections should cancel
+  self.s.cancellationToken.emit('cancel');
+
   eachAsync(
     connections,
     (conn, cb) => {
@@ -17482,6 +17672,10 @@ Pool.prototype.reset = function(callback) {
     return;
   }
 
+  // signal in-flight connections should be cancelled
+  this.s.cancellationToken.emit('cancel');
+
+  // destroy existing connections
   const connections = this.availableConnections.concat(this.inUseConnections);
   eachAsync(
     connections,
@@ -17690,7 +17884,7 @@ Pool.prototype.write = function(command, options, cb) {
 function canCompress(command) {
   const commandDoc = command instanceof Msg ? command.command : command.query;
   const commandName = Object.keys(commandDoc)[0];
-  return uncompressibleCommands.indexOf(commandName) === -1;
+  return !uncompressibleCommands.has(commandName);
 }
 
 // Remove connection method
@@ -17718,7 +17912,7 @@ function createConnection(pool, callback) {
   }
 
   pool.connectingConnections++;
-  connect(pool.options, (err, connection) => {
+  connect(pool.options, pool.s.cancellationToken, (err, connection) => {
     pool.connectingConnections--;
 
     if (err) {
@@ -19041,17 +19235,24 @@ class MongoError extends Error {
     return new MongoError(options);
   }
 
+  /**
+   * Checks the error to see if it has an error label
+   * @param {string} label The error label to check for
+   * @returns {boolean} returns true if the error has the provided error label
+   */
   hasErrorLabel(label) {
     return this.errorLabels && this.errorLabels.indexOf(label) !== -1;
   }
 }
 
 /**
- * Creates a new MongoNetworkError
+ * An error indicating an issue with the network, including TCP
+ * errors and timeouts.
  *
  * @param {Error|string|object} message The error message
  * @property {string} message The error message
  * @property {string} stack The error call stack
+ * @extends MongoError
  */
 class MongoNetworkError extends MongoError {
   constructor(message) {
@@ -19065,6 +19266,7 @@ class MongoNetworkError extends MongoError {
  *
  * @param {Error|string|object} message The error message
  * @property {string} message The error message
+ * @extends MongoError
  */
 class MongoParseError extends MongoError {
   constructor(message) {
@@ -19074,12 +19276,13 @@ class MongoParseError extends MongoError {
 }
 
 /**
- * An error signifying a timeout event
+ * An error signifying a client-side timeout event
  *
  * @param {Error|string|object} message The error message
  * @param {string|object} [reason] The reason the timeout occured
  * @property {string} message The error message
  * @property {string} [reason] An optional reason context for the timeout, generally an error saved during flow of monitoring and selecting servers
+ * @extends MongoError
  */
 class MongoTimeoutError extends MongoError {
   constructor(message, reason) {
@@ -19111,6 +19314,7 @@ function makeWriteConcernResultObject(input) {
  * @param {object} result The result document (provided if ok: 1)
  * @property {string} message The error message
  * @property {object} [result] The result document (provided if ok: 1)
+ * @extends MongoError
  */
 class MongoWriteConcernError extends MongoError {
   constructor(message, result) {
@@ -19141,6 +19345,7 @@ const RETRYABLE_ERROR_CODES = new Set([
 /**
  * Determines whether an error is something the driver should attempt to retry
  *
+ * @ignore
  * @param {MongoError|Error} error
  */
 function isRetryableError(error) {
@@ -19199,6 +19404,7 @@ function isNodeShuttingDownError(err) {
  * then the pool will be cleared, and server state will completely reset
  * locally.
  *
+ * @ignore
  * @see https://github.com/mongodb/specifications/blob/master/source/server-discovery-and-monitoring/server-discovery-and-monitoring.rst#not-master-and-node-is-recovering
  * @param {MongoError|Error} error
  * @param {Server} server
@@ -19549,6 +19755,9 @@ function monitorServer(server, options) {
 
           return callback(err, null);
         }
+
+        // save round trip time
+        server.description.roundTripTime = duration;
 
         const isMaster = result.result;
         server.emit(
@@ -20404,7 +20613,10 @@ const SMALLEST_MAX_STALENESS_SECONDS = 90;
  */
 function writableServerSelector() {
   return function(topologyDescription, servers) {
-    return latencyWindowReducer(topologyDescription, servers.filter(s => s.isWritable));
+    return latencyWindowReducer(
+      topologyDescription,
+      servers.filter(s => s.isWritable)
+    );
   };
 }
 
@@ -20570,9 +20782,7 @@ function readPreferenceServerSelector(readPreference) {
       readPreference.minWireVersion > commonWireVersion
     ) {
       throw new MongoError(
-        `Minimum wire version '${
-          readPreference.minWireVersion
-        }' required, but found '${commonWireVersion}'`
+        `Minimum wire version '${readPreference.minWireVersion}' required, but found '${commonWireVersion}'`
       );
     }
 
@@ -20792,7 +21002,7 @@ class SrvPoller extends EventEmitter {
   }
 
   get intervalMS() {
-    return this.haMode ? this.heartbeatFrequencyMS : this.rescanSrvIntervalMs;
+    return this.haMode ? this.heartbeatFrequencyMS : this.rescanSrvIntervalMS;
   }
 
   start() {
@@ -22110,16 +22320,12 @@ class TopologyDescription {
 
       if (serverDescription.minWireVersion > MAX_SUPPORTED_WIRE_VERSION) {
         this.compatible = false;
-        this.compatibilityError = `Server at ${serverDescription.address} requires wire version ${
-          serverDescription.minWireVersion
-        }, but this version of the driver only supports up to ${MAX_SUPPORTED_WIRE_VERSION} (MongoDB ${MAX_SUPPORTED_SERVER_VERSION})`;
+        this.compatibilityError = `Server at ${serverDescription.address} requires wire version ${serverDescription.minWireVersion}, but this version of the driver only supports up to ${MAX_SUPPORTED_WIRE_VERSION} (MongoDB ${MAX_SUPPORTED_SERVER_VERSION})`;
       }
 
       if (serverDescription.maxWireVersion < MIN_SUPPORTED_WIRE_VERSION) {
         this.compatible = false;
-        this.compatibilityError = `Server at ${serverDescription.address} reports wire version ${
-          serverDescription.maxWireVersion
-        }, but this version of the driver requires at least ${MIN_SUPPORTED_WIRE_VERSION} (MongoDB ${MIN_SUPPORTED_SERVER_VERSION}).`;
+        this.compatibilityError = `Server at ${serverDescription.address} reports wire version ${serverDescription.maxWireVersion}, but this version of the driver requires at least ${MIN_SUPPORTED_WIRE_VERSION} (MongoDB ${MIN_SUPPORTED_SERVER_VERSION}).`;
         break;
       }
     }
@@ -22393,9 +22599,11 @@ function updateRsFromPrimary(
   // Remove hosts not in the response.
   const currentAddresses = Array.from(serverDescriptions.keys());
   const responseAddresses = serverDescription.allHosts;
-  currentAddresses.filter(addr => responseAddresses.indexOf(addr) === -1).forEach(address => {
-    serverDescriptions.delete(address);
-  });
+  currentAddresses
+    .filter(addr => responseAddresses.indexOf(addr) === -1)
+    .forEach(address => {
+      serverDescriptions.delete(address);
+    });
 
   return [checkHasPrimary(serverDescriptions), setName, maxSetVersion, maxElectionId];
 }
@@ -22686,10 +22894,8 @@ class ClientSession extends EventEmitter {
     }
 
     return new Promise((resolve, reject) => {
-      endTransaction(
-        this,
-        'commitTransaction',
-        (err, reply) => (err ? reject(err) : resolve(reply))
+      endTransaction(this, 'commitTransaction', (err, reply) =>
+        err ? reject(err) : resolve(reply)
       );
     });
   }
@@ -22707,10 +22913,8 @@ class ClientSession extends EventEmitter {
     }
 
     return new Promise((resolve, reject) => {
-      endTransaction(
-        this,
-        'abortTransaction',
-        (err, reply) => (err ? reject(err) : resolve(reply))
+      endTransaction(this, 'abortTransaction', (err, reply) =>
+        err ? reject(err) : resolve(reply)
       );
     });
   }
@@ -23138,6 +23342,7 @@ function commandSupportsReadConcern(command, options) {
 /**
  * Optionally decorate a command with sessions specific keys
  *
+ * @ignore
  * @param {ClientSession} session the session tracking transaction state
  * @param {Object} command the command to decorate
  * @param {Object} topology the topology for tracking the cluster time
@@ -29664,6 +29869,43 @@ function parseQueryString(query, options) {
   return Object.keys(result).length ? result : null;
 }
 
+/// Adds support for modern `tls` variants of out `ssl` options
+function translateTLSOptions(queryString) {
+  if (queryString.tls) {
+    queryString.ssl = queryString.tls;
+  }
+
+  if (queryString.tlsInsecure) {
+    queryString.checkServerIdentity = false;
+    queryString.sslValidate = false;
+  } else {
+    Object.assign(queryString, {
+      checkServerIdentity: queryString.tlsAllowInvalidHostnames ? false : true,
+      sslValidate: queryString.tlsAllowInvalidCertificates ? false : true
+    });
+  }
+
+  if (queryString.tlsCAFile) {
+    queryString.sslCA = queryString.tlsCAFile;
+  }
+
+  if (queryString.tlsCertificateKeyFile) {
+    if (queryString.tlsCertificateFile) {
+      queryString.sslCert = queryString.tlsCertificateFile;
+      queryString.sslKey = queryString.tlsCertificateKeyFile;
+    } else {
+      queryString.sslKey = queryString.tlsCertificateKeyFile;
+      queryString.sslCert = queryString.tlsCertificateKeyFile;
+    }
+  }
+
+  if (queryString.tlsCertificateKeyFilePassword) {
+    queryString.sslPass = queryString.tlsCertificateKeyFilePassword;
+  }
+
+  return queryString;
+}
+
 /**
  * Checks a query string for invalid tls options according to the URI options spec.
  *
@@ -29794,10 +30036,18 @@ function parseConnectionString(uri, options, callback) {
     return callback(new MongoParseError('Unescaped at-sign in authority section'));
   }
 
+  if (authorityParts[0] == null || authorityParts[0] === '') {
+    return callback(new MongoParseError('No username provided in authority section'));
+  }
+
   if (authorityParts.length > 1) {
     const authParts = authorityParts.shift().split(':');
     if (authParts.length > 2) {
       return callback(new MongoParseError('Unescaped colon in authority section'));
+    }
+
+    if (authParts[0] === '') {
+      return callback(new MongoParseError('Invalid empty username provided'));
     }
 
     if (!auth.username) auth.username = qs.unescape(authParts[0]);
@@ -29869,6 +30119,9 @@ function parseConnectionString(uri, options, callback) {
   } else {
     result.defaultDatabase = 'test';
   }
+
+  // support modern `tls` variants to SSL options
+  result.options = translateTLSOptions(result.options);
 
   try {
     applyAuthExpectations(result);
@@ -30076,9 +30329,7 @@ function makeStateMachine(stateTable) {
     const legalStates = stateTable[target.s.state];
     if (legalStates && legalStates.indexOf(newState) < 0) {
       throw new TypeError(
-        `illegal state transition from [${
-          target.s.state
-        }] => [${newState}], allowed: [${legalStates}]`
+        `illegal state transition from [${target.s.state}] => [${newState}], allowed: [${legalStates}]`
       );
     }
 
@@ -30125,6 +30376,7 @@ const databaseNamespace = __webpack_require__(/*! ./shared */ "../../mongodb/lib
 const isTransactionCommand = __webpack_require__(/*! ../transactions */ "../../mongodb/lib/core/transactions.js").isTransactionCommand;
 const applySession = __webpack_require__(/*! ../sessions */ "../../mongodb/lib/core/sessions.js").applySession;
 const MongoNetworkError = __webpack_require__(/*! ../error */ "../../mongodb/lib/core/error.js").MongoNetworkError;
+const maxWireVersion = __webpack_require__(/*! ../utils */ "../../mongodb/lib/core/utils.js").maxWireVersion;
 
 function isClientEncryptionEnabled(server) {
   return server.autoEncrypter;
@@ -30140,6 +30392,12 @@ function command(server, ns, cmd, options, callback) {
 
   if (!isClientEncryptionEnabled(server)) {
     _command(server, ns, cmd, options, callback);
+    return;
+  }
+
+  const wireVersion = maxWireVersion(server);
+  if (typeof wireVersion !== 'number' || wireVersion < 8) {
+    callback(new MongoError('Auto-encryption requires a minimum MongoDB version of 4.2'));
     return;
   }
 
@@ -30261,7 +30519,9 @@ function supportsOpMsg(topologyOrServer) {
 }
 
 function _cryptCommand(server, ns, cmd, options, callback) {
-  const shouldBypassAutoEncryption = !!server.s.options.bypassAutoEncryption;
+  const shouldBypassAutoEncryption = !!(
+    server.s.options.autoEncryption && server.s.options.autoEncryption.bypassAutoEncryption
+  );
   const autoEncrypter = server.autoEncrypter;
   function commandResponseHandler(err, response) {
     if (err || response == null) {
@@ -30269,7 +30529,7 @@ function _cryptCommand(server, ns, cmd, options, callback) {
       return;
     }
 
-    autoEncrypter.decrypt(response.result, (err, decrypted) => {
+    autoEncrypter.decrypt(response.result, options, (err, decrypted) => {
       if (err) {
         callback(err, null);
         return;
@@ -30286,7 +30546,7 @@ function _cryptCommand(server, ns, cmd, options, callback) {
     return;
   }
 
-  autoEncrypter.encrypt(ns, cmd, (err, encrypted) => {
+  autoEncrypter.encrypt(ns, cmd, options, (err, encrypted) => {
     if (err) {
       callback(err, null);
       return;
@@ -30311,15 +30571,15 @@ module.exports = command;
 "use strict";
 
 
-var Snappy = __webpack_require__(/*! ../connection/utils */ "../../mongodb/lib/core/connection/utils.js").retrieveSnappy(),
-  zlib = __webpack_require__(/*! zlib */ "zlib");
+const Snappy = __webpack_require__(/*! ../connection/utils */ "../../mongodb/lib/core/connection/utils.js").retrieveSnappy();
+const zlib = __webpack_require__(/*! zlib */ "zlib");
 
-var compressorIDs = {
+const compressorIDs = {
   snappy: 1,
   zlib: 2
 };
 
-var uncompressibleCommands = [
+const uncompressibleCommands = new Set([
   'ismaster',
   'saslStart',
   'saslContinue',
@@ -30330,10 +30590,10 @@ var uncompressibleCommands = [
   'copydbSaslStart',
   'copydbgetnonce',
   'copydb'
-];
+]);
 
 // Facilitate compressing a message using an agreed compressor
-var compress = function(self, dataToBeCompressed, callback) {
+function compress(self, dataToBeCompressed, callback) {
   switch (self.options.agreedCompressor) {
     case 'snappy':
       Snappy.compress(dataToBeCompressed, callback);
@@ -30353,10 +30613,10 @@ var compress = function(self, dataToBeCompressed, callback) {
           '".'
       );
   }
-};
+}
 
 // Decompress a message using the given compressor
-var decompress = function(compressorID, compressedData, callback) {
+function decompress(compressorID, compressedData, callback) {
   if (compressorID < 0 || compressorID > compressorIDs.length) {
     throw new Error(
       'Server sent message compressed using an unsupported compressor. (Received compressor ID ' +
@@ -30374,13 +30634,13 @@ var decompress = function(compressorID, compressedData, callback) {
     default:
       callback(null, compressedData);
   }
-};
+}
 
 module.exports = {
-  compressorIDs: compressorIDs,
-  uncompressibleCommands: uncompressibleCommands,
-  compress: compress,
-  decompress: decompress
+  compressorIDs,
+  uncompressibleCommands,
+  compress,
+  decompress
 };
 
 
@@ -32469,11 +32729,13 @@ Db.prototype.command = function(command, options, callback) {
  * @param {object} [pipeline=[]] Array containing all the aggregation framework commands for the execution.
  * @param {object} [options] Optional settings.
  * @param {(ReadPreference|string)} [options.readPreference] The preferred read preference (ReadPreference.PRIMARY, ReadPreference.PRIMARY_PREFERRED, ReadPreference.SECONDARY, ReadPreference.SECONDARY_PREFERRED, ReadPreference.NEAREST).
+ * @param {number} [options.batchSize=1000] The number of documents to return per batch. See {@link https://docs.mongodb.com/manual/reference/command/aggregate|aggregation documentation}.
  * @param {object} [options.cursor] Return the query as cursor, on 2.6 > it returns as a real cursor on pre 2.6 it returns as an emulated cursor.
- * @param {number} [options.cursor.batchSize=1000] The number of documents to return per batch. See {@link https://docs.mongodb.com/manual/reference/command/aggregate|aggregation documentation}.
+ * @param {number} [options.cursor.batchSize=1000] Deprecated. Use `options.batchSize`
  * @param {boolean} [options.explain=false] Explain returns the aggregation execution plan (requires mongodb 2.6 >).
  * @param {boolean} [options.allowDiskUse=false] allowDiskUse lets the server know if it can use disk to store temporary results for the aggregation (requires mongodb 2.6 >).
  * @param {number} [options.maxTimeMS] maxTimeMS specifies a cumulative time limit in milliseconds for processing operations on the cursor. MongoDB interrupts the operation at the earliest following interrupt point.
+ * @param {number} [options.maxAwaitTimeMS] The maximum amount of time for the server to wait on new documents to satisfy a tailable cursor query.
  * @param {boolean} [options.bypassDocumentValidation=false] Allow driver to bypass schema validation in MongoDB 3.2 or higher.
  * @param {boolean} [options.raw=false] Return document results as raw BSON buffers.
  * @param {boolean} [options.promoteLongs=true] Promotes Long values to number if they fit inside the 53 bits resolution.
@@ -33321,6 +33583,7 @@ module.exports = GridFSBucketReadStream;
  * Do not instantiate this class directly. Use `openDownloadStream()` instead.
  *
  * @class
+ * @extends external:Readable
  * @param {Collection} chunks Handle for chunks collection
  * @param {Collection} files Handle for files collection
  * @param {Object} readPreference The read preference to use
@@ -33332,9 +33595,7 @@ module.exports = GridFSBucketReadStream;
  * @param {Number} [options.end] Optional 0-based offset in bytes to stop streaming before
  * @fires GridFSBucketReadStream#error
  * @fires GridFSBucketReadStream#file
- * @return {GridFSBucketReadStream} a GridFSBucketReadStream instance.
  */
-
 function GridFSBucketReadStream(chunks, files, readPreference, filter, options) {
   this.s = {
     bytesRead: 0,
@@ -33393,6 +33654,8 @@ util.inherits(GridFSBucketReadStream, stream.Readable);
 
 /**
  * Reads from the cursor and pushes to the stream.
+ * Private Impl, do not call directly
+ * @ignore
  * @method
  */
 
@@ -33413,7 +33676,7 @@ GridFSBucketReadStream.prototype._read = function() {
  * (e.g. if you've already called `on('data')`)
  * @method
  * @param {Number} start Offset in bytes to start reading at
- * @return {GridFSBucketReadStream}
+ * @return {GridFSBucketReadStream} Reference to Self
  */
 
 GridFSBucketReadStream.prototype.start = function(start) {
@@ -33428,7 +33691,7 @@ GridFSBucketReadStream.prototype.start = function(start) {
  * (e.g. if you've already called `on('data')`)
  * @method
  * @param {Number} end Offset in bytes to stop reading at
- * @return {GridFSBucketReadStream}
+ * @return {GridFSBucketReadStream} Reference to self
  */
 
 GridFSBucketReadStream.prototype.end = function(end) {
@@ -33761,6 +34024,7 @@ module.exports = GridFSBucket;
 /**
  * Constructor for a streaming GridFS interface
  * @class
+ * @extends external:EventEmitter
  * @param {Db} db A db handle
  * @param {object} [options] Optional settings.
  * @param {string} [options.bucketName="fs"] The 'files' and 'chunks' collections will be prefixed with the bucket name followed by a dot.
@@ -33768,7 +34032,6 @@ module.exports = GridFSBucket;
  * @param {object} [options.writeConcern] Optional write concern to be passed to write operations, for instance `{ w: 1 }`
  * @param {object} [options.readPreference] Optional read preference to be passed to read operations
  * @fires GridFSBucketWriteStream#index
- * @return {GridFSBucket}
  */
 
 function GridFSBucket(db, options) {
@@ -34097,7 +34360,8 @@ function _drop(_this, callback) {
 /**
  * Callback format for all GridFSBucket methods that can accept a callback.
  * @callback GridFSBucket~errorCallback
- * @param {MongoError} error An error instance representing any errors that occurred
+ * @param {MongoError|undefined} error If present, an error instance representing any errors that occurred
+ * @param {*} result If present, a returned result for the method
  */
 
 
@@ -34129,6 +34393,7 @@ module.exports = GridFSBucketWriteStream;
  * Do not instantiate this class directly. Use `openUploadStream()` instead.
  *
  * @class
+ * @extends external:Writable
  * @param {GridFSBucket} bucket Handle for this stream's corresponding bucket
  * @param {string} filename The value of the 'filename' key in the files doc
  * @param {object} [options] Optional settings.
@@ -34140,7 +34405,6 @@ module.exports = GridFSBucketWriteStream;
  * @param {boolean} [options.disableMD5=false] If true, disables adding an md5 field to file data
  * @fires GridFSBucketWriteStream#error
  * @fires GridFSBucketWriteStream#finish
- * @return {GridFSBucketWriteStream} a GridFSBucketWriteStream instance.
  */
 
 function GridFSBucketWriteStream(bucket, filename, options) {
@@ -34202,7 +34466,7 @@ util.inherits(GridFSBucketWriteStream, stream.Writable);
  * @method
  * @param {Buffer} chunk Buffer to write
  * @param {String} encoding Optional encoding for the buffer
- * @param {Function} callback Function to call when the chunk was added to the buffer, or if the entire chunk was persisted to MongoDB if this chunk caused a flush.
+ * @param {GridFSBucket~errorCallback} callback Function to call when the chunk was added to the buffer, or if the entire chunk was persisted to MongoDB if this chunk caused a flush.
  * @return {Boolean} False if this write required flushing a chunk to MongoDB. True otherwise.
  */
 
@@ -34251,7 +34515,7 @@ GridFSBucketWriteStream.prototype.abort = function(callback) {
  * @method
  * @param {Buffer} chunk Buffer to write
  * @param {String} encoding Optional encoding for the buffer
- * @param {Function} callback Function to call when all files and chunks have been persisted to MongoDB
+ * @param {GridFSBucket~errorCallback} callback Function to call when all files and chunks have been persisted to MongoDB
  */
 
 GridFSBucketWriteStream.prototype.end = function(chunk, encoding, callback) {
@@ -35135,14 +35399,21 @@ var open = function(self, options, callback) {
       var chunkIndexOptions = shallowClone(writeConcern);
       chunkIndexOptions.unique = true;
       // Ensure index on chunk collection
-      chunkCollection.ensureIndex([['files_id', 1], ['n', 1]], chunkIndexOptions, function() {
-        // Open the connection
-        _open(self, writeConcern, function(err, r) {
-          if (err) return callback(err);
-          self.isOpen = true;
-          callback(err, r);
-        });
-      });
+      chunkCollection.ensureIndex(
+        [
+          ['files_id', 1],
+          ['n', 1]
+        ],
+        chunkIndexOptions,
+        function() {
+          // Open the connection
+          _open(self, writeConcern, function(err, r) {
+            if (err) return callback(err);
+            self.isOpen = true;
+            callback(err, r);
+          });
+        }
+      );
     });
   } else {
     // Open the gridstore
@@ -36891,26 +37162,12 @@ const CloseOperation = __webpack_require__(/*! ./operations/close */ "../../mong
  */
 
 /**
- * Configuration options for a automatic client encryption.
+ * Configuration options for drivers wrapping the node driver.
  *
- * **NOTE**: Support for client side encryption is in beta. Backwards-breaking changes may be made before the final release.
- *
- * @typedef {Object} AutoEncryptionOptions
- * @property {MongoClient} [keyVaultClient] A `MongoClient` used to fetch keys from a key vault
- * @property {string} [keyVaultNamespace] The namespace where keys are stored in the key vault
- * @property {object} [kmsProviders] Provider details for the desired Key Management Service to use for encryption
- * @property {object} [kmsProviders.aws] Optional settings for the AWS KMS provider
- * @property {string} [kmsProviders.aws.accessKeyId] The access key used for the AWS KMS provider
- * @property {string} [kmsProviders.aws.secretAccessKey] The secret access key used for the AWS KMS provider
- * @property {object} [kmsProviders.local] Optional settings for the local KMS provider
- * @property {string} [kmsProviders.local.key] The master key used to encrypt/decrypt data keys
- * @property {object} [schemaMap] A map of namespaces to a local JSON schema for encryption
- * @property {boolean} [bypassAutoEncryption] Allows the user to bypass auto encryption, maintaining implicit decryption
- * @property {object} [extraOptions] Extra options related to the mongocryptd process
- * @property {string} [extraOptions.mongocryptURI] A local process the driver communicates with to determine how to encrypt values in a command. Defaults to "mongodb://%2Fvar%2Fmongocryptd.sock" if domain sockets are available or "mongodb://localhost:27020" otherwise
- * @property {boolean} [extraOptions.mongocryptdBypassSpawn=false] If true, autoEncryption will not attempt to spawn a mongocryptd before connecting
- * @property {string} [extraOptions.mongocryptdSpawnPath] The path to the mongocryptd executable on the system
- * @property {string[]} [extraOptions.mongocryptdSpawnArgs] Command line arguments to use when auto-spawning a mongocryptd
+ * @typedef {Object} DriverInfoOptions
+ * @property {string} [name] The name of the driver
+ * @property {string} [version] The version of the driver
+ * @property {string} [platform] Optional platform information
  */
 
 /**
@@ -36928,13 +37185,21 @@ const CloseOperation = __webpack_require__(/*! ./operations/close */ "../../mong
  * @param {string} url The connection URI string
  * @param {object} [options] Optional settings
  * @param {number} [options.poolSize=5] The maximum size of the individual server pool
- * @param {boolean} [options.ssl=false] Enable SSL connection.
+ * @param {boolean} [options.ssl=false] Enable SSL connection. *deprecated* use `tls` variants
  * @param {boolean} [options.sslValidate=false] Validate mongod server certificate against Certificate Authority
- * @param {buffer} [options.sslCA=undefined] SSL Certificate store binary buffer
- * @param {buffer} [options.sslCert=undefined] SSL Certificate binary buffer
- * @param {buffer} [options.sslKey=undefined] SSL Key file binary buffer
- * @param {string} [options.sslPass=undefined] SSL Certificate pass phrase
- * @param {buffer} [options.sslCRL=undefined] SSL Certificate revocation list binary buffer
+ * @param {buffer} [options.sslCA=undefined] SSL Certificate store binary buffer *deprecated* use `tls` variants
+ * @param {buffer} [options.sslCert=undefined] SSL Certificate binary buffer *deprecated* use `tls` variants
+ * @param {buffer} [options.sslKey=undefined] SSL Key file binary buffer *deprecated* use `tls` variants
+ * @param {string} [options.sslPass=undefined] SSL Certificate pass phrase *deprecated* use `tls` variants
+ * @param {buffer} [options.sslCRL=undefined] SSL Certificate revocation list binary buffer *deprecated* use `tls` variants
+ * @param {boolean|function} [options.checkServerIdentity=true] Ensure we check server identify during SSL, set to false to disable checking. Only works for Node 0.12.x or higher. You can pass in a boolean or your own checkServerIdentity override function. *deprecated* use `tls` variants
+ * @param {boolean} [options.tls=false] Enable TLS connections
+ * @param {boolean} [options.tlsinsecure=false] Relax TLS constraints, disabling validation
+ * @param {string} [options.tlsCAFile] A path to file with either a single or bundle of certificate authorities to be considered trusted when making a TLS connection
+ * @param {string} [options.tlsCertificateKeyFile] A path to the client certificate file or the client private key file; in the case that they both are needed, the files should be concatenated
+ * @param {string} [options.tlsCertificateKeyFilePassword] The password to decrypt the client private key to be used for TLS connections
+ * @param {boolean} [options.tlsAllowInvalidCertificates] Specifies whether or not the driver should error when the server’s TLS certificate is invalid
+ * @param {boolean} [options.tlsAllowInvalidHostnames] Specifies whether or not the driver should error when there is a mismatch between the server’s hostname and the hostname specified by the TLS certificate
  * @param {boolean} [options.autoReconnect=true] Enable autoReconnect for single server instances
  * @param {boolean} [options.noDelay=true] TCP Connection no delay
  * @param {boolean} [options.keepAlive=true] TCP Connection keep alive enabled
@@ -36972,7 +37237,6 @@ const CloseOperation = __webpack_require__(/*! ./operations/close */ "../../mong
  * @param {boolean} [options.promoteBuffers=false] Promotes Binary BSON values to native Node Buffers
  * @param {boolean} [options.promoteLongs=true] Promotes long values to number if they fit inside the 53 bits resolution
  * @param {boolean} [options.domainsEnabled=false] Enable the wrapping of the callback in the current domain, disabled by default to avoid perf hit
- * @param {boolean|function} [options.checkServerIdentity=true] Ensure we check server identify during SSL, set to false to disable checking. Only works for Node 0.12.x or higher. You can pass in a boolean or your own checkServerIdentity override function
  * @param {object} [options.validateOptions=false] Validate MongoClient passed in options for correctness
  * @param {string} [options.appname=undefined] The name of the application that created this MongoClient instance. MongoDB 3.4 and newer will print this value in the server log upon establishing each connection. It is also recorded in the slow query log and profile collections
  * @param {string} [options.auth.user=undefined] The username for auth
@@ -36987,7 +37251,7 @@ const CloseOperation = __webpack_require__(/*! ./operations/close */ "../../mong
  * @param {number} [options.minSize] If present, the connection pool will be initialized with minSize connections, and will never dip below minSize connections
  * @param {boolean} [options.useNewUrlParser=true] Determines whether or not to use the new url parser. Enables the new, spec-compliant, url parser shipped in the core driver. This url parser fixes a number of problems with the original parser, and aims to outright replace that parser in the near future. Defaults to true, and must be explicitly set to false to use the legacy url parser.
  * @param {boolean} [options.useUnifiedTopology] Enables the new unified topology layer
- * @param {AutoEncryptionOptions} [options.autoEncryption] Optionally enable client side auto encryption
+ * @param {AutoEncrypter~AutoEncryptionOptions} [options.autoEncryption] Optionally enable client side auto encryption
  * @param {DriverInfoOptions} [options.driverInfo] Allows a wrapping driver to amend the client metadata generated by the driver to include information about the wrapping driver
  * @param {MongoClient~connectCallback} [callback] The command result callback
  * @return {MongoClient} a MongoClient instance
@@ -37154,13 +37418,21 @@ MongoClient.prototype.isConnected = function(options) {
  * @param {string} url The connection URI string
  * @param {object} [options] Optional settings
  * @param {number} [options.poolSize=5] The maximum size of the individual server pool
- * @param {boolean} [options.ssl=false] Enable SSL connection.
- * @param {boolean} [options.sslValidate=false] Validate mongod server certificate against Certificate Authority
- * @param {buffer} [options.sslCA=undefined] SSL Certificate store binary buffer
- * @param {buffer} [options.sslCert=undefined] SSL Certificate binary buffer
- * @param {buffer} [options.sslKey=undefined] SSL Key file binary buffer
- * @param {string} [options.sslPass=undefined] SSL Certificate pass phrase
- * @param {buffer} [options.sslCRL=undefined] SSL Certificate revocation list binary buffer
+ * @param {boolean} [options.ssl=false] Enable SSL connection. *deprecated* use `tls` variants
+ * @param {boolean} [options.sslValidate=false] Validate mongod server certificate against Certificate Authority *deprecated* use `tls` variants
+ * @param {buffer} [options.sslCA=undefined] SSL Certificate store binary buffer *deprecated* use `tls` variants
+ * @param {buffer} [options.sslCert=undefined] SSL Certificate binary buffer *deprecated* use `tls` variants
+ * @param {buffer} [options.sslKey=undefined] SSL Key file binary buffer *deprecated* use `tls` variants
+ * @param {string} [options.sslPass=undefined] SSL Certificate pass phrase *deprecated* use `tls` variants
+ * @param {buffer} [options.sslCRL=undefined] SSL Certificate revocation list binary buffer *deprecated* use `tls` variants
+ * @param {boolean|function} [options.checkServerIdentity=true] Ensure we check server identify during SSL, set to false to disable checking. Only works for Node 0.12.x or higher. You can pass in a boolean or your own checkServerIdentity override function. *deprecated* use `tls` variants
+ * @param {boolean} [options.tls=false] Enable TLS connections
+ * @param {boolean} [options.tlsinsecure=false] Relax TLS constraints, disabling validation
+ * @param {string} [options.tlsCAFile] A path to file with either a single or bundle of certificate authorities to be considered trusted when making a TLS connection
+ * @param {string} [options.tlsCertificateKeyFile] A path to the client certificate file or the client private key file; in the case that they both are needed, the files should be concatenated
+ * @param {string} [options.tlsCertificateKeyFilePassword] The password to decrypt the client private key to be used for TLS connections
+ * @param {boolean} [options.tlsAllowInvalidCertificates] Specifies whether or not the driver should error when the server’s TLS certificate is invalid
+ * @param {boolean} [options.tlsAllowInvalidHostnames] Specifies whether or not the driver should error when there is a mismatch between the server’s hostname and the hostname specified by the TLS certificate
  * @param {boolean} [options.autoReconnect=true] Enable autoReconnect for single server instances
  * @param {boolean} [options.noDelay=true] TCP Connection no delay
  * @param {boolean} [options.keepAlive=true] TCP Connection keep alive enabled
@@ -37198,7 +37470,6 @@ MongoClient.prototype.isConnected = function(options) {
  * @param {boolean} [options.promoteBuffers=false] Promotes Binary BSON values to native Node Buffers
  * @param {boolean} [options.promoteLongs=true] Promotes long values to number if they fit inside the 53 bits resolution
  * @param {boolean} [options.domainsEnabled=false] Enable the wrapping of the callback in the current domain, disabled by default to avoid perf hit
- * @param {boolean|function} [options.checkServerIdentity=true] Ensure we check server identify during SSL, set to false to disable checking. Only works for Node 0.12.x or higher. You can pass in a boolean or your own checkServerIdentity override function
  * @param {object} [options.validateOptions=false] Validate MongoClient passed in options for correctness
  * @param {string} [options.appname=undefined] The name of the application that created this MongoClient instance. MongoDB 3.4 and newer will print this value in the server log upon establishing each connection. It is also recorded in the slow query log and profile collections
  * @param {string} [options.auth.user=undefined] The username for auth
@@ -38378,9 +38649,7 @@ class CommandOperationV2 extends OperationBase {
     if (options.collation && serverWireVersion < SUPPORTS_WRITE_CONCERN_AND_COLLATION) {
       callback(
         new MongoError(
-          `Server ${
-            server.name
-          }, which reports wire version ${serverWireVersion}, does not support collation`
+          `Server ${server.name}, which reports wire version ${serverWireVersion}, does not support collation`
         )
       );
       return;
@@ -38630,8 +38899,7 @@ function indexInformation(db, name, options, callback) {
   }
 
   // Get the list of indexes of the specified collection
-  db
-    .collection(name)
+  db.collection(name)
     .listIndexes(options)
     .toArray((err, indexes) => {
       if (err) return callback(toError(err));
@@ -38885,6 +39153,7 @@ const ReplSet = __webpack_require__(/*! ../topologies/replset */ "../../mongodb/
 const Server = __webpack_require__(/*! ../topologies/server */ "../../mongodb/lib/topologies/server.js");
 const ServerSessionPool = __webpack_require__(/*! ../core */ "../../mongodb/lib/core/index.js").Sessions.ServerSessionPool;
 const emitDeprecationWarning = __webpack_require__(/*! ../utils */ "../../mongodb/lib/utils.js").emitDeprecationWarning;
+const fs = __webpack_require__(/*! fs */ "fs");
 
 let client;
 function loadClient() {
@@ -39008,7 +39277,15 @@ const validOptionNames = [
   'serverSelectionTimeoutMS',
   'useRecoveryToken',
   'autoEncryption',
-  'driverInfo'
+  'driverInfo',
+  'tls',
+  'tlsinsecure',
+  'tlsAllowInvalidCertificates',
+  'tlsAllowInvalidHostnames',
+  'tlsCAFile',
+  'tlsCertificateFile',
+  'tlsCertificateKeyFile',
+  'tlsCertificateKeyFilePassword'
 ];
 
 const ignoreOptionNames = ['native_parser'];
@@ -39112,6 +39389,18 @@ function collectEvents(mongoClient, topology) {
   return collectedEvents;
 }
 
+function resolveTLSOptions(options) {
+  if (options.tls == null) {
+    return;
+  }
+
+  ['sslCA', 'sslKey', 'sslCert'].forEach(optionName => {
+    if (options[optionName]) {
+      options[optionName] = fs.readFileSync(options[optionName]);
+    }
+  });
+}
+
 const emitDeprecationForNonUnifiedTopology = deprecate(() => {},
 'current Server Discovery and Monitoring engine is deprecated, and will be removed in a future version. ' + 'To use the new Server Discover and Monitoring engine, pass option { useUnifiedTopology: true } to the MongoClient constructor.');
 
@@ -39156,6 +39445,9 @@ function connect(mongoClient, url, options, callback) {
     if (_finalOptions.db_options && _finalOptions.db_options.auth) {
       delete _finalOptions.db_options.auth;
     }
+
+    // resolve tls options if needed
+    resolveTLSOptions(_finalOptions);
 
     // Store the merged options object
     mongoClient.s.options = _finalOptions;
@@ -39373,7 +39665,13 @@ function createTopology(mongoClient, topologyType, options, callback) {
       return;
     }
     try {
-      AutoEncrypter = __webpack_require__(!(function webpackMissingModule() { var e = new Error("Cannot find module 'mongodb-client-encryption'"); e.code = 'MODULE_NOT_FOUND'; throw e; }()))(__webpack_require__(/*! ../../index */ "../../mongodb/index.js")).AutoEncrypter;
+      let mongodbClientEncryption = __webpack_require__(!(function webpackMissingModule() { var e = new Error("Cannot find module 'mongodb-client-encryption'"); e.code = 'MODULE_NOT_FOUND'; throw e; }()));
+      if (typeof mongodbClientEncryption.extension !== 'function') {
+        throw new MongoError(
+          'loaded version of `mongodb-client-encryption` does not have property `extension`. Please make sure you are loading the correct version of `mongodb-client-encryption`'
+        );
+      }
+      AutoEncrypter = mongodbClientEncryption.extension(__webpack_require__(/*! ../../index */ "../../mongodb/index.js")).AutoEncrypter;
     } catch (err) {
       callback(err);
       return;
@@ -39399,7 +39697,7 @@ function createUnifiedOptions(finalOptions, options) {
     'rs_options',
     'mongos_options'
   ];
-  const noMerge = ['readconcern', 'compression'];
+  const noMerge = ['readconcern', 'compression', 'autoencryption'];
 
   for (const name in options) {
     if (noMerge.indexOf(name.toLowerCase()) !== -1) {
@@ -39811,8 +40109,7 @@ class CreateCollectionOperation extends CommandOperation {
     listCollectionOptions = applyWriteConcern(listCollectionOptions, { db }, listCollectionOptions);
 
     // Check if we have the name
-    db
-      .listCollections({ name }, listCollectionOptions)
+    db.listCollections({ name }, listCollectionOptions)
       .setReadPreference(ReadPreference.PRIMARY)
       .toArray((err, collections) => {
         if (err != null) return handleCallback(callback, err, null);
@@ -40774,8 +41071,7 @@ function indexInformation(db, name, options, callback) {
   }
 
   // Get the list of indexes of the specified collection
-  db
-    .collection(name)
+  db.collection(name)
     .listIndexes(options)
     .toArray((err, indexes) => {
       if (err) return callback(toError(err));
@@ -40796,8 +41092,7 @@ function indexInformation(db, name, options, callback) {
  */
 function profilingInfo(db, options, callback) {
   try {
-    db
-      .collection('system.profile')
+    db.collection('system.profile')
       .find({}, options)
       .toArray(callback);
   } catch (err) {
@@ -41739,7 +42034,8 @@ function executeWithServerSelection(topology, operation, callback) {
 
     const shouldRetryReads =
       topology.s.options.retryReads !== false &&
-      (operation.session && !inTransaction) &&
+      operation.session &&
+      !inTransaction &&
       supportsRetryableReads(server) &&
       operation.canRetryRead;
 
@@ -42849,7 +43145,8 @@ class MapReduceOperation extends OperationBase {
       options.readPreference !== false &&
       options.readPreference !== 'primary' &&
       options['out'] &&
-      (options['out'].inline !== 1 && options['out'] !== 'inline')
+      options['out'].inline !== 1 &&
+      options['out'] !== 'inline'
     ) {
       // Force readPreference to primary
       options.readPreference = 'primary';
@@ -47238,7 +47535,7 @@ module.exports = WriteConcern;
 /*! exports provided: name, version, description, main, files, repository, keywords, peerOptionalDependencies, dependencies, devDependencies, license, engines, bugs, scripts, homepage, optionalDependencies, default */
 /***/ (function(module) {
 
-module.exports = JSON.parse("{\"name\":\"mongodb\",\"version\":\"3.3.5\",\"description\":\"The official MongoDB driver for Node.js\",\"main\":\"index.js\",\"files\":[\"index.js\",\"lib\"],\"repository\":{\"type\":\"git\",\"url\":\"git@github.com:mongodb/node-mongodb-native.git\"},\"keywords\":[\"mongodb\",\"driver\",\"official\"],\"peerOptionalDependencies\":{\"kerberos\":\"^1.1.0\",\"mongodb-client-encryption\":\"^1.0.0\",\"mongodb-extjson\":\"^2.1.2\",\"snappy\":\"^6.1.1\",\"bson-ext\":\"^2.0.0\"},\"dependencies\":{\"bson\":\"^1.1.1\",\"require_optional\":\"^1.0.1\",\"safe-buffer\":\"^5.1.2\"},\"devDependencies\":{\"bluebird\":\"3.5.0\",\"chai\":\"^4.1.1\",\"chai-subset\":\"^1.6.0\",\"chalk\":\"^2.4.2\",\"co\":\"4.6.0\",\"coveralls\":\"^2.11.6\",\"eslint\":\"^4.5.0\",\"eslint-plugin-prettier\":\"^2.2.0\",\"istanbul\":\"^0.4.5\",\"jsdoc\":\"3.5.5\",\"lodash.camelcase\":\"^4.3.0\",\"mocha\":\"5.2.0\",\"mocha-sinon\":\"^2.1.0\",\"mongodb-extjson\":\"^2.1.1\",\"mongodb-mock-server\":\"^1.0.1\",\"prettier\":\"~1.12.0\",\"semver\":\"^5.5.0\",\"sinon\":\"^4.3.0\",\"sinon-chai\":\"^3.2.0\",\"snappy\":\"^6.1.2\",\"standard-version\":\"^4.4.0\",\"yargs\":\"^14.2.0\",\"worker-farm\":\"^1.5.0\",\"wtfnode\":\"^0.8.0\"},\"license\":\"Apache-2.0\",\"engines\":{\"node\":\">=4\"},\"bugs\":{\"url\":\"https://github.com/mongodb/node-mongodb-native/issues\"},\"scripts\":{\"atlas\":\"node ./test/atlas_connectivity_tests.js\",\"test\":\"npm run lint && mocha --recursive test/functional test/unit test/core\",\"test-nolint\":\"mocha --recursive test/functional test/unit test/core\",\"coverage\":\"istanbul cover mongodb-test-runner -- -t 60000 test/core test/unit test/functional\",\"lint\":\"eslint lib test\",\"format\":\"prettier --print-width 100 --tab-width 2 --single-quote --write 'test/**/*.js' 'lib/**/*.js'\",\"bench\":\"node test/driverBench/\",\"generate-evergreen\":\"node .evergreen/generate_evergreen_tasks.js\",\"release\":\"standard-version -i HISTORY.md\"},\"homepage\":\"https://github.com/mongodb/node-mongodb-native\",\"optionalDependencies\":{\"saslprep\":\"^1.0.0\"}}");
+module.exports = JSON.parse("{\"name\":\"mongodb\",\"version\":\"3.4.1\",\"description\":\"The official MongoDB driver for Node.js\",\"main\":\"index.js\",\"files\":[\"index.js\",\"lib\"],\"repository\":{\"type\":\"git\",\"url\":\"git@github.com:mongodb/node-mongodb-native.git\"},\"keywords\":[\"mongodb\",\"driver\",\"official\"],\"peerOptionalDependencies\":{\"kerberos\":\"^1.1.0\",\"mongodb-client-encryption\":\"^1.0.0\",\"mongodb-extjson\":\"^2.1.2\",\"snappy\":\"^6.1.1\",\"bson-ext\":\"^2.0.0\"},\"dependencies\":{\"bson\":\"^1.1.1\",\"require_optional\":\"^1.0.1\",\"safe-buffer\":\"^5.1.2\"},\"devDependencies\":{\"bluebird\":\"3.5.0\",\"bl\":\"^2.2.0\",\"chai\":\"^4.1.1\",\"chai-subset\":\"^1.6.0\",\"chalk\":\"^2.4.2\",\"co\":\"4.6.0\",\"coveralls\":\"^2.11.6\",\"eslint\":\"^4.5.0\",\"eslint-plugin-prettier\":\"^2.2.0\",\"istanbul\":\"^0.4.5\",\"jsdoc\":\"3.5.5\",\"lodash.camelcase\":\"^4.3.0\",\"mocha\":\"5.2.0\",\"mocha-sinon\":\"^2.1.0\",\"mongodb-extjson\":\"^2.1.1\",\"mongodb-mock-server\":\"^1.0.1\",\"prettier\":\"^1.19.1\",\"semver\":\"^5.5.0\",\"sinon\":\"^4.3.0\",\"sinon-chai\":\"^3.2.0\",\"snappy\":\"^6.1.2\",\"standard-version\":\"^4.4.0\",\"worker-farm\":\"^1.5.0\",\"wtfnode\":\"^0.8.0\",\"yargs\":\"^14.2.0\"},\"license\":\"Apache-2.0\",\"engines\":{\"node\":\">=4\"},\"bugs\":{\"url\":\"https://github.com/mongodb/node-mongodb-native/issues\"},\"scripts\":{\"atlas\":\"node ./test/tools/atlas_connectivity_tests.js\",\"test\":\"npm run lint && mocha --recursive test/functional test/unit test/core\",\"test-nolint\":\"mocha --recursive test/functional test/unit test/core\",\"coverage\":\"istanbul cover mongodb-test-runner -- -t 60000 test/core test/unit test/functional\",\"lint\":\"eslint lib test\",\"format\":\"prettier --print-width 100 --tab-width 2 --single-quote --write 'test/**/*.js' 'lib/**/*.js'\",\"bench\":\"node test/benchmarks/driverBench/\",\"generate-evergreen\":\"node .evergreen/generate_evergreen_tasks.js\",\"release\":\"standard-version -i HISTORY.md\"},\"homepage\":\"https://github.com/mongodb/node-mongodb-native\",\"optionalDependencies\":{\"saslprep\":\"^1.0.0\"}}");
 
 /***/ }),
 
@@ -49658,6 +49955,7 @@ const Collection = __webpack_require__(/*! ./driver */ "../../mongoose/lib/drive
 const STATES = __webpack_require__(/*! ./connectionstate */ "../../mongoose/lib/connectionstate.js");
 const MongooseError = __webpack_require__(/*! ./error/index */ "../../mongoose/lib/error/index.js");
 const PromiseProvider = __webpack_require__(/*! ./promise_provider */ "../../mongoose/lib/promise_provider.js");
+const TimeoutError = __webpack_require__(/*! ./error/timeout */ "../../mongoose/lib/error/timeout.js");
 const applyPlugins = __webpack_require__(/*! ./helpers/schema/applyPlugins */ "../../mongoose/lib/helpers/schema/applyPlugins.js");
 const get = __webpack_require__(/*! ./helpers/get */ "../../mongoose/lib/helpers/get.js");
 const mongodb = __webpack_require__(/*! mongodb */ "../../mongodb/index.js");
@@ -50407,9 +50705,14 @@ Connection.prototype.openUri = function(uri, options, callback) {
     });
   });
 
+  const timeout = new TimeoutError();
   this.$initialConnection = Promise.all([promise, parsePromise]).
     then(res => res[0]).
     catch(err => {
+      if (err != null && err.name === 'MongoTimeoutError') {
+        err = timeout.assimilateError(err);
+      }
+
       if (this.listeners('error').length > 0) {
         process.nextTick(() => this.emit('error', err));
       }
@@ -51298,19 +51601,20 @@ function QueryCursor(query, options) {
   this._mongooseOptions = {};
   this._transforms = [];
   this.model = model;
+  this.options = options || {};
+
   model.hooks.execPre('find', query, () => {
     this._transforms = this._transforms.concat(query._transforms.slice());
-    if (options.transform) {
+    if (this.options.transform) {
       this._transforms.push(options.transform);
     }
     // Re: gh-8039, you need to set the `cursor.batchSize` option, top-level
     // `batchSize` option doesn't work.
-    options = options || {};
-    if (options.batchSize) {
-      options.cursor = options.cursor || {};
-      options.cursor.batchSize = options.batchSize;
+    if (this.options.batchSize) {
+      this.options.cursor = options.cursor || {};
+      this.options.cursor.batchSize = options.batchSize;
     }
-    model.collection.find(query._conditions, options, function(err, cursor) {
+    model.collection.find(query._conditions, this.options, function(err, cursor) {
       if (_this._error) {
         cursor.close(function() {});
         _this.listeners('error').length > 0 && _this.emit('error', _this._error);
@@ -51471,6 +51775,15 @@ QueryCursor.prototype.eachAsync = function(fn, opts, callback) {
 };
 
 /**
+ * The `options` passed in to the `QueryCursor` constructor.
+ *
+ * @api public
+ * @property options
+ */
+
+QueryCursor.prototype.options;
+
+/**
  * Adds a [cursor flag](http://mongodb.github.io/node-mongodb-native/2.2/api/Cursor.html#addCursorFlag).
  * Useful for setting the `noCursorTimeout` and `tailable` flags.
  *
@@ -51616,9 +51929,11 @@ const MongooseError = __webpack_require__(/*! ./error/index */ "../../mongoose/l
 const MixedSchema = __webpack_require__(/*! ./schema/mixed */ "../../mongoose/lib/schema/mixed.js");
 const ObjectExpectedError = __webpack_require__(/*! ./error/objectExpected */ "../../mongoose/lib/error/objectExpected.js");
 const ObjectParameterError = __webpack_require__(/*! ./error/objectParameter */ "../../mongoose/lib/error/objectParameter.js");
+const ParallelValidateError = __webpack_require__(/*! ./error/parallelValidate */ "../../mongoose/lib/error/parallelValidate.js");
 const Schema = __webpack_require__(/*! ./schema */ "../../mongoose/lib/schema.js");
 const StrictModeError = __webpack_require__(/*! ./error/strict */ "../../mongoose/lib/error/strict.js");
-const ValidatorError = __webpack_require__(/*! ./schematype */ "../../mongoose/lib/schematype.js").ValidatorError;
+const ValidationError = __webpack_require__(/*! ./error/validation */ "../../mongoose/lib/error/validation.js");
+const ValidatorError = __webpack_require__(/*! ./error/validator */ "../../mongoose/lib/error/validator.js");
 const VirtualType = __webpack_require__(/*! ./virtualtype */ "../../mongoose/lib/virtualtype.js");
 const cleanModifiedSubpaths = __webpack_require__(/*! ./helpers/document/cleanModifiedSubpaths */ "../../mongoose/lib/helpers/document/cleanModifiedSubpaths.js");
 const compile = __webpack_require__(/*! ./helpers/document/compile */ "../../mongoose/lib/helpers/document/compile.js").compile;
@@ -51634,7 +51949,6 @@ const internalToObjectOptions = __webpack_require__(/*! ./options */ "../../mong
 const mpath = __webpack_require__(/*! mpath */ "../../mpath/index.js");
 const utils = __webpack_require__(/*! ./utils */ "../../mongoose/lib/utils.js");
 
-const ValidationError = MongooseError.ValidationError;
 const clone = utils.clone;
 const deepEqual = utils.deepEqual;
 const isMongooseObject = utils.isMongooseObject;
@@ -52749,11 +53063,7 @@ Document.prototype.$set = function $set(path, val, type, options) {
         Array.isArray(schema.options[this.schema.options.typeKey]) &&
         schema.options[this.schema.options.typeKey].length &&
         schema.options[this.schema.options.typeKey][0].ref &&
-        Array.isArray(val) &&
-        val.length > 0 &&
-        val[0] instanceof Document &&
-        val[0].constructor.modelName &&
-        (schema.options[this.schema.options.typeKey][0].ref === val[0].constructor.baseModelName || schema.options[this.schema.options.typeKey][0].ref === val[0].constructor.modelName)) {
+        _isManuallyPopulatedArray(val, schema.options[this.schema.options.typeKey][0].ref)) {
       if (this.ownerDocument) {
         popOpts = { [populateModelSymbol]: val[0].constructor };
         this.ownerDocument().populated(this.$__fullPath(path),
@@ -52789,6 +53099,15 @@ Document.prototype.$set = function $set(path, val, type, options) {
     }
 
     if (!didPopulate && this.$__.populated) {
+      // If this array partially contains populated documents, convert them
+      // all to ObjectIds re: #8443
+      if (Array.isArray(val) && this.$__.populated[path]) {
+        for (let i = 0; i < val.length; ++i) {
+          if (val[i] instanceof Document) {
+            val[i] = val[i]._id;
+          }
+        }
+      }
       delete this.$__.populated[path];
     }
 
@@ -52813,6 +53132,34 @@ Document.prototype.$set = function $set(path, val, type, options) {
 
   return this;
 };
+
+/*!
+ * ignore
+ */
+
+function _isManuallyPopulatedArray(val, ref) {
+  if (!Array.isArray(val)) {
+    return false;
+  }
+  if (val.length === 0) {
+    return false;
+  }
+
+  for (const el of val) {
+    if (!(el instanceof Document)) {
+      return false;
+    }
+    const modelName = el.constructor.modelName;
+    if (modelName == null) {
+      return false;
+    }
+    if (el.constructor.modelName != ref && el.constructor.baseModelName != ref) {
+      return false;
+    }
+  }
+
+  return true;
+}
 
 /**
  * Sets the value of a path, or many paths.
@@ -53599,6 +53946,14 @@ Document.prototype.isDirectSelected = function isDirectSelected(path) {
  */
 
 Document.prototype.validate = function(pathsToValidate, options, callback) {
+  let parallelValidate;
+
+  if (this.$__.validating) {
+    parallelValidate = new ParallelValidateError(this);
+  } else {
+    this.$__.validating = new ParallelValidateError(this);
+  }
+
   if (typeof pathsToValidate === 'function') {
     callback = pathsToValidate;
     options = null;
@@ -53610,7 +53965,12 @@ Document.prototype.validate = function(pathsToValidate, options, callback) {
   }
 
   return utils.promiseOrCallback(callback, cb => {
-    this.$__validate(pathsToValidate, options, function(error) {
+    if (parallelValidate != null) {
+      return cb(parallelValidate);
+    }
+
+    this.$__validate(pathsToValidate, options, (error) => {
+      this.$__.validating = null;
       cb(error);
     });
   }, this.constructor.events);
@@ -53655,6 +54015,11 @@ function _getPathsToValidate(doc) {
   paths = paths.concat(Object.keys(doc.$__.activePaths.states.init));
   paths = paths.concat(Object.keys(doc.$__.activePaths.states.modify));
   paths = paths.concat(Object.keys(doc.$__.activePaths.states.default));
+
+  // Single nested paths (paths embedded under single nested subdocs) will
+  // be validated on their own when we call `validate()` on the subdoc itself.
+  // Re: gh-8468
+  paths = paths.filter(p => !doc.schema.singleNestedPaths.hasOwnProperty(p));
 
   if (!doc.ownerDocument) {
     const subdocs = doc.$__getAllSubdocs();
@@ -53771,34 +54136,35 @@ Document.prototype.$__validate = function(pathsToValidate, options, callback) {
 
   const _this = this;
   const _complete = () => {
-    let err = this.$__.validationError;
+    let validationError = this.$__.validationError;
     this.$__.validationError = undefined;
 
-    if (shouldValidateModifiedOnly && err != null) {
+    if (shouldValidateModifiedOnly && validationError != null) {
       // Remove any validation errors that aren't from modified paths
-      const errors = Object.keys(err.errors);
+      const errors = Object.keys(validationError.errors);
       for (const errPath of errors) {
         if (!this.isModified(errPath)) {
-          delete err.errors[errPath];
+          delete validationError.errors[errPath];
         }
       }
-      if (Object.keys(err.errors).length === 0) {
-        err = void 0;
+      if (Object.keys(validationError.errors).length === 0) {
+        validationError = void 0;
       }
     }
 
     this.$__.cachedRequired = {};
     this.emit('validate', _this);
     this.constructor.emit('validate', _this);
-    if (err) {
-      for (const key in err.errors) {
+    if (validationError) {
+      for (const key in validationError.errors) {
         // Make sure cast errors persist
-        if (!this[documentArrayParent] && err.errors[key] instanceof MongooseError.CastError) {
-          this.invalidate(key, err.errors[key]);
+        if (!this[documentArrayParent] &&
+            validationError.errors[key] instanceof MongooseError.CastError) {
+          this.invalidate(key, validationError.errors[key]);
         }
       }
 
-      return err;
+      return validationError;
     }
   };
 
@@ -53876,7 +54242,7 @@ Document.prototype.$__validate = function(pathsToValidate, options, callback) {
       p.doValidate(val, function(err) {
         if (err && (!p.$isMongooseDocumentArray || err.$isArrayValidatorError)) {
           if (p.$isSingleNested &&
-              err.name === 'ValidationError' &&
+              err instanceof ValidationError &&
               p.schema.options.storeSubdocValidationError === false) {
             return --total || complete();
           }
@@ -53973,7 +54339,7 @@ Document.prototype.validateSync = function(pathsToValidate, options) {
     });
     if (err && (!p.$isMongooseDocumentArray || err.$isArrayValidatorError)) {
       if (p.$isSingleNested &&
-          err.name === 'ValidationError' &&
+          err instanceof ValidationError &&
           p.schema.options.storeSubdocValidationError === false) {
         return;
       }
@@ -56763,7 +57129,7 @@ const MongooseError = __webpack_require__(/*! ./ */ "../../mongoose/lib/error/in
 
 function ParallelSaveError(doc) {
   const msg = 'Can\'t save() the same doc multiple times in parallel. Document: ';
-  MongooseError.call(this, msg + doc.id);
+  MongooseError.call(this, msg + doc._id);
   this.name = 'ParallelSaveError';
 }
 
@@ -56780,6 +57146,50 @@ ParallelSaveError.prototype.constructor = MongooseError;
 
 module.exports = ParallelSaveError;
 
+
+/***/ }),
+
+/***/ "../../mongoose/lib/error/parallelValidate.js":
+/*!******************************************************************************************************************!*\
+  !*** /Users/admin/Code/work/repos/BlueKeel/API/programs-api/node_modules/mongoose/lib/error/parallelValidate.js ***!
+  \******************************************************************************************************************/
+/*! no static exports found */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+
+/*!
+ * Module dependencies.
+ */
+
+const MongooseError = __webpack_require__(/*! ./mongooseError */ "../../mongoose/lib/error/mongooseError.js");
+
+/**
+ * ParallelValidate Error constructor.
+ *
+ * @inherits MongooseError
+ * @api private
+ */
+
+function ParallelValidateError(doc) {
+  const msg = 'Can\'t validate() the same doc multiple times in parallel. Document: ';
+  MongooseError.call(this, msg + doc._id);
+  this.name = 'ParallelValidateError';
+}
+
+/*!
+ * Inherits from MongooseError.
+ */
+
+ParallelValidateError.prototype = Object.create(MongooseError.prototype);
+ParallelValidateError.prototype.constructor = MongooseError;
+
+/*!
+ * exports
+ */
+
+module.exports = ParallelValidateError;
 
 /***/ }),
 
@@ -56875,6 +57285,19 @@ function MongooseTimeoutError(message) {
 
 MongooseTimeoutError.prototype = Object.create(MongooseError.prototype);
 MongooseTimeoutError.prototype.constructor = MongooseError;
+
+/*!
+ * ignore
+ */
+
+MongooseTimeoutError.prototype.assimilateError = function(err) {
+  this.message = err.message;
+  Object.assign(this, err, {
+    name: 'MongooseTimeoutError'
+  });
+
+  return this;
+};
 
 module.exports = MongooseTimeoutError;
 
@@ -57348,9 +57771,12 @@ module.exports = function eachAsync(next, fn, options, callback) {
           return done();
         }
 
+        ++handleResultsInProgress;
+
+        // Kick off the subsequent `next()` before handling the result, but
+        // make sure we know that we still have a result to handle re: #8422
         done();
 
-        ++handleResultsInProgress;
         handleNextResult(doc, function(err) {
           --handleResultsInProgress;
           if (err != null) {
@@ -58831,13 +59257,22 @@ module.exports = function assignVals(o) {
 
     const parts = o.path.split('.');
     let cur = docs[i];
+    const curPath = parts[0];
     for (let j = 0; j < parts.length - 1; ++j) {
       // If we get to an array with a dotted path, like `arr.foo`, don't set
       // `foo` on the array.
       if (Array.isArray(cur) && !utils.isArrayIndex(parts[j])) {
         break;
       }
+
       if (cur[parts[j]] == null) {
+        // If nothing to set, avoid creating an unnecessary array. Otherwise
+        // we'll end up with a single doc in the array with only defaults.
+        // See gh-8342, gh-8455
+        const schematype = originalSchema._getSchema(curPath);
+        if (valueToSet == null && schematype != null && schematype.$isMongooseArray) {
+          return;
+        }
         cur[parts[j]] = {};
       }
       cur = cur[parts[j]];
@@ -59023,6 +59458,7 @@ module.exports = function getModelsMapForPopulate(model, docs, options) {
 
     modelNames = null;
     let isRefPath = false;
+    let normalizedRefPath = null;
     if (Array.isArray(schema)) {
       for (let j = 0; j < schema.length; ++j) {
         let _modelNames;
@@ -59030,6 +59466,7 @@ module.exports = function getModelsMapForPopulate(model, docs, options) {
           const res = _getModelNames(doc, schema[j]);
           _modelNames = res.modelNames;
           isRefPath = res.isRefPath;
+          normalizedRefPath = res.refPath;
         } catch (error) {
           return error;
         }
@@ -59048,6 +59485,7 @@ module.exports = function getModelsMapForPopulate(model, docs, options) {
         const res = _getModelNames(doc, schema);
         modelNames = res.modelNames;
         isRefPath = res.isRefPath;
+        normalizedRefPath = res.refPath;
       } catch (error) {
         return error;
       }
@@ -59155,11 +59593,47 @@ module.exports = function getModelsMapForPopulate(model, docs, options) {
 
     let match = get(options, 'match', null) ||
       get(currentOptions, 'match', null) ||
+      get(options, 'virtual.options.match', null) ||
       get(options, 'virtual.options.options.match', null);
 
     const hasMatchFunction = typeof match === 'function';
     if (hasMatchFunction) {
       match = match.call(doc, doc);
+    }
+
+    // Re: gh-8452. Embedded discriminators may not have `refPath`, so clear
+    // out embedded discriminator docs that don't have a `refPath` on the
+    // populated path.
+    if (isRefPath && normalizedRefPath != null) {
+      const pieces = normalizedRefPath.split('.');
+      let cur = '';
+      for (let i = 0; i < pieces.length; ++i) {
+        cur = cur + (cur.length === 0 ? '' : '.') + pieces[i];
+        const schematype = modelSchema.path(cur);
+        if (schematype != null &&
+            schematype.$isMongooseArray &&
+            schematype.caster.discriminators != null &&
+            Object.keys(schematype.caster.discriminators).length > 0) {
+          const subdocs = utils.getValue(cur, doc);
+          const remnant = options.path.substr(cur.length + 1);
+          const discriminatorKey = schematype.caster.schema.options.discriminatorKey;
+          modelNames = [];
+          for (const subdoc of subdocs) {
+            const discriminatorValue = utils.getValue(discriminatorKey, subdoc);
+            const discriminatorSchema = schematype.caster.discriminators[discriminatorValue].schema;
+            if (discriminatorSchema == null) {
+              continue;
+            }
+            const _path = discriminatorSchema.path(remnant);
+            if (_path == null || _path.options.refPath == null) {
+              const docValue = utils.getValue(localField.substr(cur.length + 1), subdoc);
+              ret = ret.filter(v => v !== docValue);
+              continue;
+            }
+            modelNames.push(utils.getValue(pieces.slice(i + 1).join('.'), subdoc));
+          }
+        }
+      }
     }
 
     let k = modelNames.length;
@@ -59183,6 +59657,7 @@ module.exports = function getModelsMapForPopulate(model, docs, options) {
 
       let ids = ret;
       const flat = Array.isArray(ret) ? utils.array.flatten(ret) : [];
+
       if (isRefPath && Array.isArray(ret) && flat.length === modelNames.length) {
         ids = flat.filter((val, i) => modelNames[i] === modelName);
       }
@@ -59334,14 +59809,14 @@ module.exports = function getModelsMapForPopulate(model, docs, options) {
     }
 
     if (!modelNames) {
-      return { modelNames: modelNames, isRefPath: isRefPath };
+      return { modelNames: modelNames, isRefPath: isRefPath, refPath: normalizedRefPath };
     }
 
     if (!Array.isArray(modelNames)) {
       modelNames = [modelNames];
     }
 
-    return { modelNames: modelNames, isRefPath: isRefPath };
+    return { modelNames: modelNames, isRefPath: isRefPath, refPath: normalizedRefPath };
   }
 
   return map;
@@ -60017,6 +60492,50 @@ module.exports = function isPathSelectedInclusive(fields, path) {
 
 /***/ }),
 
+/***/ "../../mongoose/lib/helpers/projection/parseProjection.js":
+/*!******************************************************************************************************************************!*\
+  !*** /Users/admin/Code/work/repos/BlueKeel/API/programs-api/node_modules/mongoose/lib/helpers/projection/parseProjection.js ***!
+  \******************************************************************************************************************************/
+/*! no static exports found */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+
+/**
+ * Convert a string or array into a projection object, retaining all
+ * `-` and `+` paths.
+ */
+
+module.exports = function parseProjection(v, retainMinusPaths) {
+  const type = typeof v;
+
+  if (type === 'string') {
+    v = v.split(/\s+/);
+  }
+  if (!Array.isArray(v) && Object.prototype.toString.call(v) !== '[object Arguments]') {
+    return v;
+  }
+
+  const len = v.length;
+  const ret = {};
+  for (let i = 0; i < len; ++i) {
+    let field = v[i];
+    if (!field) {
+      continue;
+    }
+    const include = '-' == field[0] ? 0 : 1;
+    if (!retainMinusPaths && include === 0) {
+      field = field.substring(1);
+    }
+    ret[field] = include;
+  }
+
+  return ret;
+};
+
+/***/ }),
+
 /***/ "../../mongoose/lib/helpers/query/applyGlobalMaxTimeMS.js":
 /*!******************************************************************************************************************************!*\
   !*** /Users/admin/Code/work/repos/BlueKeel/API/programs-api/node_modules/mongoose/lib/helpers/query/applyGlobalMaxTimeMS.js ***!
@@ -60217,6 +60736,8 @@ const castNumber = __webpack_require__(/*! ../../cast/number */ "../../mongoose/
 const cast = __webpack_require__(/*! ../../cast */ "../../mongoose/lib/cast.js");
 const getEmbeddedDiscriminatorPath = __webpack_require__(/*! ./getEmbeddedDiscriminatorPath */ "../../mongoose/lib/helpers/query/getEmbeddedDiscriminatorPath.js");
 const handleImmutable = __webpack_require__(/*! ./handleImmutable */ "../../mongoose/lib/helpers/query/handleImmutable.js");
+const moveImmutableProperties = __webpack_require__(/*! ../update/moveImmutableProperties */ "../../mongoose/lib/helpers/update/moveImmutableProperties.js");
+const schemaMixedSymbol = __webpack_require__(/*! ../../schema/symbols */ "../../mongoose/lib/schema/symbols.js").schemaMixedSymbol;
 const utils = __webpack_require__(/*! ../../utils */ "../../mongoose/lib/utils.js");
 
 /*!
@@ -60258,6 +60779,8 @@ module.exports = function castUpdate(schema, obj, options, context, filter) {
   const overwrite = options.overwrite;
 
   filter = filter || {};
+
+  moveImmutableProperties(schema, obj, context);
 
   while (i--) {
     const op = ops[i];
@@ -60720,7 +61243,8 @@ function castUpdateVal(schema, val, op, $conditional, context, path) {
     return schema.castForQueryWrapper({
       val: val,
       context: context,
-      $skipQueryCastForUpdate: val != null && schema.$isMongooseArray && schema.$fullPath != null && !schema.$fullPath.match(/\d+$/)
+      $skipQueryCastForUpdate: val != null && schema.$isMongooseArray && schema.$fullPath != null && !schema.$fullPath.match(/\d+$/),
+      $applySetters: schema[schemaMixedSymbol] != null
     });
   }
 
@@ -60898,6 +61422,7 @@ module.exports = function handleImmutable(schematype, strict, obj, key, fullPath
     throw new StrictModeError(null,
       `Field ${fullPath} is immutable and strict = 'throw'`);
   }
+
   delete obj[key];
   return true;
 };
@@ -61348,6 +61873,37 @@ module.exports = function getPath(schema, path) {
 
 /***/ }),
 
+/***/ "../../mongoose/lib/helpers/schema/handleIdOption.js":
+/*!*************************************************************************************************************************!*\
+  !*** /Users/admin/Code/work/repos/BlueKeel/API/programs-api/node_modules/mongoose/lib/helpers/schema/handleIdOption.js ***!
+  \*************************************************************************************************************************/
+/*! no static exports found */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+
+const addAutoId = __webpack_require__(/*! ./addAutoId */ "../../mongoose/lib/helpers/schema/addAutoId.js");
+
+module.exports = function handleIdOption(schema, options) {
+  if (options == null || options._id == null) {
+    return schema;
+  }
+
+  schema = schema.clone();
+  if (!options._id) {
+    schema.remove('_id');
+    schema.options._id = false;
+  } else if (!schema.paths['_id']) {
+    addAutoId(schema);
+    schema.options._id = true;
+  }
+
+  return schema;
+};
+
+/***/ }),
+
 /***/ "../../mongoose/lib/helpers/schema/handleTimestampOption.js":
 /*!********************************************************************************************************************************!*\
   !*** /Users/admin/Code/work/repos/BlueKeel/API/programs-api/node_modules/mongoose/lib/helpers/schema/handleTimestampOption.js ***!
@@ -61394,7 +61950,7 @@ function handleTimestampOption(arg, prop) {
 
 
 module.exports = function merge(s1, s2) {
-  s1.add(s2.obj || {});
+  s1.add(s2.tree || {});
 
   s1.callQueue = s1.callQueue.concat(s2.callQueue);
   s1.method(s2.methods);
@@ -62030,6 +62586,70 @@ module.exports = function modifiedPaths(update) {
   return res;
 };
 
+
+/***/ }),
+
+/***/ "../../mongoose/lib/helpers/update/moveImmutableProperties.js":
+/*!**********************************************************************************************************************************!*\
+  !*** /Users/admin/Code/work/repos/BlueKeel/API/programs-api/node_modules/mongoose/lib/helpers/update/moveImmutableProperties.js ***!
+  \**********************************************************************************************************************************/
+/*! no static exports found */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+
+const get = __webpack_require__(/*! ../get */ "../../mongoose/lib/helpers/get.js");
+
+/**
+ * Given an update, move all $set on immutable properties to $setOnInsert.
+ * No need to check for upserts, because there's no harm in setting
+ * $setOnInsert even if `upsert` is false.
+ */
+
+module.exports = function moveImmutableProperties(schema, update, ctx) {
+  if (update == null) {
+    return;
+  }
+
+  const keys = Object.keys(update);
+  for (const key of keys) {
+    const isDollarKey = key.startsWith('$');
+
+    if (key === '$set') {
+      const updatedPaths = Object.keys(update[key]);
+      for (const path of updatedPaths) {
+        _walkUpdatePath(schema, update[key], path, update, ctx);
+      }
+    } else if (!isDollarKey) {
+      _walkUpdatePath(schema, update, key, update, ctx);
+    }
+
+  }
+};
+
+function _walkUpdatePath(schema, op, path, update, ctx) {
+  const schematype = schema.path(path);
+  if (schematype == null) {
+    return;
+  }
+
+  let immutable = get(schematype, 'options.immutable', null);
+  if (immutable == null) {
+    return;
+  }
+  if (typeof immutable === 'function') {
+    immutable = immutable.call(ctx, ctx);
+  }
+
+  if (!immutable) {
+    return;
+  }
+
+  update.$setOnInsert = update.$setOnInsert || {};
+  update.$setOnInsert[path] = op[path];
+  delete op[path];
+}
 
 /***/ }),
 
@@ -63510,7 +64130,9 @@ const isPathSelectedInclusive = __webpack_require__(/*! ./helpers/projection/isP
 const get = __webpack_require__(/*! ./helpers/get */ "../../mongoose/lib/helpers/get.js");
 const leanPopulateMap = __webpack_require__(/*! ./helpers/populate/leanPopulateMap */ "../../mongoose/lib/helpers/populate/leanPopulateMap.js");
 const modifiedPaths = __webpack_require__(/*! ./helpers/update/modifiedPaths */ "../../mongoose/lib/helpers/update/modifiedPaths.js");
+const mpath = __webpack_require__(/*! mpath */ "../../mpath/index.js");
 const parallelLimit = __webpack_require__(/*! ./helpers/parallelLimit */ "../../mongoose/lib/helpers/parallelLimit.js");
+const parseProjection = __webpack_require__(/*! ./helpers/projection/parseProjection */ "../../mongoose/lib/helpers/projection/parseProjection.js");
 const util = __webpack_require__(/*! util */ "util");
 const utils = __webpack_require__(/*! ./utils */ "../../mongoose/lib/utils.js");
 
@@ -63779,8 +64401,14 @@ Model.prototype.$__handleSave = function(options, callback) {
         callback(null, ret);
       });
     } else {
-      this.$__reset();
-      callback();
+      this.constructor.exists(this.$__where())
+        .then((documentExists)=>{
+          if (!documentExists) throw new DocumentNotFoundError(this.$__where(),this.constructor.modelName);
+
+          this.$__reset();
+          callback();
+        })
+        .catch(callback);
       return;
     }
 
@@ -65396,12 +66024,12 @@ Model.deleteOne = function deleteOne(conditions, options, callback) {
     options = null;
   }
 
-  const mq = new this.Query(conditions, {}, this, this.collection);
+  const mq = new this.Query({}, {}, this, this.collection);
   mq.setOptions(options);
 
   callback = this.$handleCallbackError(callback);
 
-  return mq.deleteOne(callback);
+  return mq.deleteOne(conditions, callback);
 };
 
 /**
@@ -65436,12 +66064,12 @@ Model.deleteMany = function deleteMany(conditions, options, callback) {
     options = null;
   }
 
-  const mq = new this.Query(conditions, {}, this, this.collection);
+  const mq = new this.Query({}, {}, this, this.collection);
   mq.setOptions(options);
 
   callback = this.$handleCallbackError(callback);
 
-  return mq.deleteMany(callback);
+  return mq.deleteMany(conditions, callback);
 };
 
 /**
@@ -67347,9 +67975,8 @@ Model.mapReduce = function mapReduce(o, callback) {
  *
  * ####NOTE:
  *
- * - Arguments are not cast to the model's schema because `$project` operators allow redefining the "shape" of the documents at any stage of the pipeline, which may leave documents in an incompatible format.
+ * - Mongoose does **not** cast aggregation pipelines to the model's schema because `$project` and `$group` operators allow redefining the "shape" of the documents at any stage of the pipeline, which may leave documents in an incompatible format. You can use the [mongoose-cast-aggregation plugin](https://github.com/AbdelrahmanHafez/mongoose-cast-aggregation) to enable minimal casting for aggregation pipelines.
  * - The documents returned are plain javascript objects, not mongoose documents (since any shape of document can be returned).
- * - Requires MongoDB >= 2.1
  *
  * @see Aggregate #aggregate_Aggregate
  * @see MongoDB http://docs.mongodb.org/manual/applications/aggregation/
@@ -67642,6 +68269,7 @@ Model.geoSearch = function(conditions, options, callback) {
  * @param {boolean} [options.clone=false] When you do `BlogPost.find().populate('author')`, blog posts with the same author will share 1 copy of an `author` doc. Enable this option to make Mongoose clone populated docs before assigning them.
  * @param {Object|Function} [options.match=null] Add an additional filter to the populate query. Can be a filter object containing [MongoDB query syntax](https://docs.mongodb.com/manual/tutorial/query-documents/), or a function that returns a filter object.
  * @param {Boolean} [options.skipInvalidIds=false] By default, Mongoose throws a cast error if `localField` and `foreignField` schemas don't line up. If you enable this option, Mongoose will instead filter out any `localField` properties that cannot be casted to `foreignField`'s schema type.
+ * @param {Object} [options.options=null] Additional options like `limit` and `lean`.
  * @param {Function} [callback(err,doc)] Optional callback, executed upon completion. Receives `err` and the `doc(s)`.
  * @return {Promise}
  * @api public
@@ -67840,7 +68468,12 @@ function populate(model, docs, options, callback) {
 function _execPopulateQuery(mod, match, select, assignmentOpts, callback) {
   const subPopulate = utils.clone(mod.options.populate);
 
-  const query = mod.model.find(match, select, mod.options.options);
+  const queryOptions = Object.assign({}, mod.options.options);
+  if (mod.count) {
+    delete queryOptions.skip;
+  }
+
+  const query = mod.model.find(match, select, queryOptions);
   // If we're doing virtual populate and projection is inclusive and foreign
   // field is not selected, automatically select it because mongoose needs it.
   // If projection is exclusive and client explicitly unselected the foreign
@@ -67881,7 +68514,9 @@ function _assign(model, vals, mod, assignmentOpts) {
   const isVirtual = mod.isVirtual;
   const justOne = mod.justOne;
   let _val;
-  const lean = options.options && options.options.lean;
+  const lean = get(options, 'options.lean', false);
+  const projection = parseProjection(get(options, 'select', null), true) ||
+    parseProjection(get(options, 'options.select', null), true);
   const len = vals.length;
   const rawOrder = {};
   const rawDocs = {};
@@ -67951,6 +68586,16 @@ function _assign(model, vals, mod, assignmentOpts) {
         leanPopulateMap.set(val, mod.model);
       } else {
         val.$__.wasPopulated = true;
+      }
+
+      // gh-8460: if user used `-foreignField`, assume this means they
+      // want the foreign field unset even if it isn't excluded in the query.
+      if (projection != null && projection.hasOwnProperty('-' + foreignField)) {
+        if (val.$__ != null) {
+          val.set(foreignField, void 0);
+        } else {
+          mpath.unset(foreignField, val);
+        }
       }
     }
   }
@@ -68242,9 +68887,7 @@ Model.$wrapCallback = function(callback) {
 
   return function(err) {
     if (err != null && err.name === 'MongoTimeoutError') {
-      arguments[0] = timeout;
-      timeout.message = err.message;
-      Object.assign(timeout, err);
+      arguments[0] = timeout.assimilateError(err);
     }
 
     return callback.apply(null, arguments);
@@ -68577,6 +69220,26 @@ const opts = __webpack_require__(/*! ./propertyOptions */ "../../mongoose/lib/op
 
 Object.defineProperty(SchemaDocumentArrayOptions.prototype, 'excludeIndexes', opts);
 
+/**
+ * If set, overwrites the child schema's `_id` option.
+ *
+ * ####Example:
+ *
+ *     const childSchema = Schema({ name: String });
+ *     const parentSchema = Schema({
+ *       child: { type: childSchema, _id: false }
+ *     });
+ *     parentSchema.path('child').schema.options._id; // false
+ *
+ * @api public
+ * @property _id
+ * @memberOf SchemaDocumentArrayOptions
+ * @type Array
+ * @instance
+ */
+
+Object.defineProperty(SchemaDocumentArrayOptions.prototype, '_id', opts);
+
 /*!
  * ignore
  */
@@ -68697,6 +69360,15 @@ Object.defineProperty(SchemaNumberOptions.prototype, 'max', opts);
 /**
  * If set, Mongoose adds a validator that checks that this path is strictly
  * equal to one of the given values.
+ *
+ * ####Example:
+ *     const schema = new Schema({
+ *       favoritePrime: {
+ *         type: Number,
+ *         enum: [3, 5, 7]
+ *       }
+ *     });
+ *     schema.path('favoritePrime').options.enum; // [3, 5, 7]
  *
  * @api public
  * @property enum
@@ -69158,6 +69830,141 @@ module.exports = SchemaTypeOptions;
 
 /***/ }),
 
+/***/ "../../mongoose/lib/options/VirtualOptions.js":
+/*!******************************************************************************************************************!*\
+  !*** /Users/admin/Code/work/repos/BlueKeel/API/programs-api/node_modules/mongoose/lib/options/VirtualOptions.js ***!
+  \******************************************************************************************************************/
+/*! no static exports found */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+
+const opts = __webpack_require__(/*! ./propertyOptions */ "../../mongoose/lib/options/propertyOptions.js");
+
+class VirtualOptions {
+  constructor(obj) {
+    Object.assign(this, obj);
+
+    if (obj != null && obj.options != null) {
+      this.options = Object.assign({}, obj.options);
+    }
+  }
+}
+
+/**
+ * Marks this virtual as a populate virtual, and specifies the model to
+ * use for populate.
+ *
+ * @api public
+ * @property ref
+ * @memberOf VirtualOptions
+ * @type String|Model|Function
+ * @instance
+ */
+
+Object.defineProperty(VirtualOptions.prototype, 'ref', opts);
+
+/**
+ * Marks this virtual as a populate virtual, and specifies the path that
+ * contains the name of the model to populate
+ *
+ * @api public
+ * @property refPath
+ * @memberOf VirtualOptions
+ * @type String|Function
+ * @instance
+ */
+
+Object.defineProperty(VirtualOptions.prototype, 'refPath', opts);
+
+/**
+ * The name of the property in the local model to match to `foreignField`
+ * in the foreign model.
+ *
+ * @api public
+ * @property localField
+ * @memberOf VirtualOptions
+ * @type String|Function
+ * @instance
+ */
+
+Object.defineProperty(VirtualOptions.prototype, 'localField', opts);
+
+/**
+ * The name of the property in the foreign model to match to `localField`
+ * in the local model.
+ *
+ * @api public
+ * @property foreignField
+ * @memberOf VirtualOptions
+ * @type String|Function
+ * @instance
+ */
+
+Object.defineProperty(VirtualOptions.prototype, 'foreignField', opts);
+
+/**
+ * Whether to populate this virtual as a single document (true) or an
+ * array of documents (false).
+ *
+ * @api public
+ * @property justOne
+ * @memberOf VirtualOptions
+ * @type Boolean
+ * @instance
+ */
+
+Object.defineProperty(VirtualOptions.prototype, 'justOne', opts);
+
+/**
+ * If true, populate just the number of documents where `localField`
+ * matches `foreignField`, as opposed to the documents themselves.
+ *
+ * If `count` is set, it overrides `justOne`.
+ *
+ * @api public
+ * @property count
+ * @memberOf VirtualOptions
+ * @type Boolean
+ * @instance
+ */
+
+Object.defineProperty(VirtualOptions.prototype, 'count', opts);
+
+/**
+ * Add an additional filter to populate, in addition to `localField`
+ * matches `foreignField`.
+ *
+ * @api public
+ * @property match
+ * @memberOf VirtualOptions
+ * @type Object|Function
+ * @instance
+ */
+
+Object.defineProperty(VirtualOptions.prototype, 'match', opts);
+
+/**
+ * Additional options to pass to the query used to `populate()`:
+ *
+ * - `sort`
+ * - `skip`
+ * - `limit`
+ *
+ * @api public
+ * @property options
+ * @memberOf VirtualOptions
+ * @type Object
+ * @instance
+ */
+
+Object.defineProperty(VirtualOptions.prototype, 'options', opts);
+
+module.exports = VirtualOptions;
+
+/***/ }),
+
 /***/ "../../mongoose/lib/options/propertyOptions.js":
 /*!*******************************************************************************************************************!*\
   !*** /Users/admin/Code/work/repos/BlueKeel/API/programs-api/node_modules/mongoose/lib/options/propertyOptions.js ***!
@@ -69499,7 +70306,7 @@ function storeShard() {
 
 module.exports = function(schema) {
   const unshift = true;
-  schema.pre('save', false, function(next, options) {
+  schema.pre('save', false, function validateBeforeSave(next, options) {
     const _this = this;
     // Nested docs have their own presave
     if (this.ownerDocument) {
@@ -69633,6 +70440,7 @@ const hasDollarKeys = __webpack_require__(/*! ./helpers/query/hasDollarKeys */ "
 const helpers = __webpack_require__(/*! ./queryhelpers */ "../../mongoose/lib/queryhelpers.js");
 const isInclusive = __webpack_require__(/*! ./helpers/projection/isInclusive */ "../../mongoose/lib/helpers/projection/isInclusive.js");
 const mquery = __webpack_require__(/*! mquery */ "../../mquery/lib/mquery.js");
+const parseProjection = __webpack_require__(/*! ./helpers/projection/parseProjection */ "../../mongoose/lib/helpers/projection/parseProjection.js");
 const selectPopulatedFields = __webpack_require__(/*! ./helpers/query/selectPopulatedFields */ "../../mongoose/lib/helpers/query/selectPopulatedFields.js");
 const setDefaultsOnInsert = __webpack_require__(/*! ./helpers/setDefaultsOnInsert */ "../../mongoose/lib/helpers/setDefaultsOnInsert.js");
 const slice = __webpack_require__(/*! sliced */ "../../sliced/index.js");
@@ -70551,7 +71359,6 @@ Query.prototype.select = function select() {
   let arg = arguments[0];
   if (!arg) return this;
   let i;
-  let len;
 
   if (arguments.length !== 1) {
     throw new Error('Invalid select: select only takes 1 argument');
@@ -70561,23 +71368,8 @@ Query.prototype.select = function select() {
 
   const fields = this._fields || (this._fields = {});
   const userProvidedFields = this._userProvidedFields || (this._userProvidedFields = {});
-  const type = typeof arg;
 
-  if (('string' == type || Object.prototype.toString.call(arg) === '[object Arguments]') &&
-    'number' == typeof arg.length || Array.isArray(arg)) {
-    if ('string' == type)
-      arg = arg.split(/\s+/);
-
-    for (i = 0, len = arg.length; i < len; ++i) {
-      let field = arg[i];
-      if (!field) continue;
-      const include = '-' == field[0] ? 0 : 1;
-      if (include === 0) field = field.substring(1);
-      fields[field] = include;
-      userProvidedFields[field] = include;
-    }
-    return this;
-  }
+  arg = parseProjection(arg);
 
   if (utils.isObject(arg)) {
     const keys = Object.keys(arg);
@@ -74174,6 +74966,7 @@ function castDoc(query, overwrite) {
  * @param {boolean} [options.getters=false] if true, Mongoose will call any getters defined on the `localField`. By default, Mongoose gets the raw value of `localField`. For example, you would need to set this option to `true` if you wanted to [add a `lowercase` getter to your `localField`](/docs/schematypes.html#schematype-options).
  * @param {boolean} [options.clone=false] When you do `BlogPost.find().populate('author')`, blog posts with the same author will share 1 copy of an `author` doc. Enable this option to make Mongoose clone populated docs before assigning them.
  * @param {Object|Function} [options.match=null] Add an additional filter to the populate query. Can be a filter object containing [MongoDB query syntax](https://docs.mongodb.com/manual/tutorial/query-documents/), or a function that returns a filter object.
+ * @param {Object} [options.options=null] Additional options like `limit` and `lean`.
  * @see population ./populate.html
  * @see Query#select #query_Query-select
  * @see Model.populate #model_Model.populate
@@ -74448,7 +75241,7 @@ Query.prototype.cursor = function cursor(opts) {
     this.setOptions(opts);
   }
 
-  const options = Object.assign({}, this.options, {
+  const options = Object.assign({}, this._optionsForExec(), {
     projection: this.projection()
   });
   try {
@@ -75279,6 +76072,7 @@ const Kareem = __webpack_require__(/*! kareem */ "../../kareem/index.js");
 const MongooseError = __webpack_require__(/*! ./error/mongooseError */ "../../mongoose/lib/error/mongooseError.js");
 const SchemaType = __webpack_require__(/*! ./schematype */ "../../mongoose/lib/schematype.js");
 const SchemaTypeOptions = __webpack_require__(/*! ./options/SchemaTypeOptions */ "../../mongoose/lib/options/SchemaTypeOptions.js");
+const VirtualOptions = __webpack_require__(/*! ./options/VirtualOptions */ "../../mongoose/lib/options/VirtualOptions.js");
 const VirtualType = __webpack_require__(/*! ./virtualtype */ "../../mongoose/lib/virtualtype.js");
 const addAutoId = __webpack_require__(/*! ./helpers/schema/addAutoId */ "../../mongoose/lib/helpers/schema/addAutoId.js");
 const applyTimestampsToChildren = __webpack_require__(/*! ./helpers/update/applyTimestampsToChildren */ "../../mongoose/lib/helpers/update/applyTimestampsToChildren.js");
@@ -75739,6 +76533,10 @@ Schema.prototype.add = function add(obj, prefix) {
     }
     // Retain `_id: false` but don't set it as a path, re: gh-8274.
     if (key === '_id' && obj[key] === false) {
+      continue;
+    }
+    if (obj[key] instanceof VirtualType) {
+      this.virtual(obj[key]);
       continue;
     }
 
@@ -76976,12 +77774,18 @@ Schema.prototype.indexes = function() {
  */
 
 Schema.prototype.virtual = function(name, options) {
+  if (name instanceof VirtualType) {
+    return this.virtual(name.path, name.options);
+  }
+
+  options = new VirtualOptions(options);
+
   if (utils.hasUserDefinedProperty(options, ['ref', 'refPath'])) {
-    if (!options.localField) {
+    if (options.localField == null) {
       throw new Error('Reference virtuals require `localField` option');
     }
 
-    if (!options.foreignField) {
+    if (options.foreignField == null) {
       throw new Error('Reference virtuals require `foreignField` option');
     }
 
@@ -77448,12 +78252,12 @@ const ObjectExpectedError = __webpack_require__(/*! ../error/objectExpected */ "
 const SchemaSingleNestedOptions = __webpack_require__(/*! ../options/SchemaSingleNestedOptions */ "../../mongoose/lib/options/SchemaSingleNestedOptions.js");
 const SchemaType = __webpack_require__(/*! ../schematype */ "../../mongoose/lib/schematype.js");
 const $exists = __webpack_require__(/*! ./operators/exists */ "../../mongoose/lib/schema/operators/exists.js");
-const addAutoId = __webpack_require__(/*! ../helpers/schema/addAutoId */ "../../mongoose/lib/helpers/schema/addAutoId.js");
 const castToNumber = __webpack_require__(/*! ./operators/helpers */ "../../mongoose/lib/schema/operators/helpers.js").castToNumber;
 const discriminator = __webpack_require__(/*! ../helpers/model/discriminator */ "../../mongoose/lib/helpers/model/discriminator.js");
 const geospatial = __webpack_require__(/*! ./operators/geospatial */ "../../mongoose/lib/schema/operators/geospatial.js");
 const get = __webpack_require__(/*! ../helpers/get */ "../../mongoose/lib/helpers/get.js");
 const getConstructor = __webpack_require__(/*! ../helpers/discriminator/getConstructor */ "../../mongoose/lib/helpers/discriminator/getConstructor.js");
+const handleIdOption = __webpack_require__(/*! ../helpers/schema/handleIdOption */ "../../mongoose/lib/helpers/schema/handleIdOption.js");
 const internalToObjectOptions = __webpack_require__(/*! ../options */ "../../mongoose/lib/options.js").internalToObjectOptions;
 
 let Subdocument;
@@ -77471,16 +78275,7 @@ module.exports = SingleNestedPath;
  */
 
 function SingleNestedPath(schema, path, options) {
-  if (options != null && options._id != null) {
-    schema = schema.clone();
-    if (!options._id) {
-      schema.remove('_id');
-      schema.options._id = false;
-    } else if (!schema.paths['_id']) {
-      addAutoId(schema);
-      schema.options._id = true;
-    }
-  }
+  schema = handleIdOption(schema, options);
 
   this.caster = _createConstructor(schema);
   this.caster.path = path;
@@ -77595,7 +78390,7 @@ SingleNestedPath.prototype.$conditionalHandlers.$exists = $exists;
  */
 
 SingleNestedPath.prototype.cast = function(val, doc, init, priorVal) {
-  if (val && val.$isSingleNested) {
+  if (val && val.$isSingleNested && val.parent === doc) {
     return val;
   }
 
@@ -77848,6 +78643,8 @@ function SchemaArray(key, cast, options, schemaOptions) {
       this.caster = caster;
     }
 
+    this.$embeddedSchemaType = this.caster;
+
     if (!(this.caster instanceof EmbeddedDoc)) {
       this.caster.path = key;
     }
@@ -77958,11 +78755,11 @@ SchemaArray.prototype.checkRequired = function checkRequired(value, doc) {
 };
 
 /**
- * Adds an enum validator if this is an array of strings. Equivalent to
- * `SchemaString.prototype.enum()`
+ * Adds an enum validator if this is an array of strings or numbers. Equivalent to
+ * `SchemaString.prototype.enum()` or `SchemaNumber.prototype.enum()`
  *
  * @param {String|Object} [args...] enumeration values
- * @return {SchemaType} this
+ * @return {SchemaArray} this
  */
 
 SchemaArray.prototype.enum = function() {
@@ -77973,8 +78770,9 @@ SchemaArray.prototype.enum = function() {
       arr = arr.caster;
       continue;
     }
-    if (instance !== 'String') {
-      throw new Error('`enum` can only be set on an array of strings, not ' + instance);
+    if (instance !== 'String' && instance !== 'Number') {
+      throw new Error('`enum` can only be set on an array of strings or numbers ' +
+        ', not ' + instance);
     }
     break;
   }
@@ -79382,14 +80180,17 @@ const EventEmitter = __webpack_require__(/*! events */ "events").EventEmitter;
 const SchemaDocumentArrayOptions =
   __webpack_require__(/*! ../options/SchemaDocumentArrayOptions */ "../../mongoose/lib/options/SchemaDocumentArrayOptions.js");
 const SchemaType = __webpack_require__(/*! ../schematype */ "../../mongoose/lib/schematype.js");
+const ValidationError = __webpack_require__(/*! ../error/validation */ "../../mongoose/lib/error/validation.js");
 const discriminator = __webpack_require__(/*! ../helpers/model/discriminator */ "../../mongoose/lib/helpers/model/discriminator.js");
 const get = __webpack_require__(/*! ../helpers/get */ "../../mongoose/lib/helpers/get.js");
+const handleIdOption = __webpack_require__(/*! ../helpers/schema/handleIdOption */ "../../mongoose/lib/helpers/schema/handleIdOption.js");
 const util = __webpack_require__(/*! util */ "util");
 const utils = __webpack_require__(/*! ../utils */ "../../mongoose/lib/utils.js");
 const getConstructor = __webpack_require__(/*! ../helpers/discriminator/getConstructor */ "../../mongoose/lib/helpers/discriminator/getConstructor.js");
 
 const arrayParentSymbol = __webpack_require__(/*! ../helpers/symbols */ "../../mongoose/lib/helpers/symbols.js").arrayParentSymbol;
 const arrayPathSymbol = __webpack_require__(/*! ../helpers/symbols */ "../../mongoose/lib/helpers/symbols.js").arrayPathSymbol;
+const documentArrayParent = __webpack_require__(/*! ../helpers/symbols */ "../../mongoose/lib/helpers/symbols.js").documentArrayParent;
 
 let MongooseDocumentArray;
 let Subdocument;
@@ -79405,6 +80206,12 @@ let Subdocument;
  */
 
 function DocumentArrayPath(key, schema, options, schemaOptions) {
+  if (schemaOptions != null && schemaOptions._id != null) {
+    schema = handleIdOption(schema, schemaOptions);
+  } else if (options != null && options._id != null) {
+    schema = handleIdOption(schema, options);
+  }
+
   const EmbeddedDocument = _createConstructor(schema, options);
   EmbeddedDocument.prototype.$basePath = key;
 
@@ -79593,7 +80400,7 @@ DocumentArrayPath.prototype.doValidate = function(array, fn, scope, options) {
     function callback(err) {
       if (err != null) {
         error = err;
-        if (error.name !== 'ValidationError') {
+        if (!(error instanceof ValidationError)) {
           error.$isArrayValidatorError = true;
         }
       }
@@ -79757,7 +80564,7 @@ DocumentArrayPath.prototype.cast = function(value, doc, init, prev, options) {
 
     // Check if the document has a different schema (re gh-3701)
     if ((value[i].$__) &&
-        !(value[i] instanceof Constructor)) {
+        (!(value[i] instanceof Constructor) || value[i][documentArrayParent] !== doc)) {
       value[i] = value[i].toObject({
         transform: false,
         // Special case: if different model, but same schema, apply virtuals
@@ -83200,7 +84007,7 @@ SchemaType.prototype.castForQueryWrapper = function(params) {
   if ('$conditional' in params) {
     return this.castForQuery(params.$conditional, params.val);
   }
-  if (params.$skipQueryCastForUpdate) {
+  if (params.$skipQueryCastForUpdate || params.$applySetters) {
     return this._castForQuery(params.val);
   }
   return this.castForQuery(params.val);
@@ -84679,12 +85486,18 @@ class CoreMongooseArray extends Array {
     _checkManualPopulation(this, Array.prototype.slice.call(arguments, 2));
 
     if (arguments.length) {
-      const vals = [];
-      for (let i = 0; i < arguments.length; ++i) {
-        vals[i] = i < 2 ?
-          arguments[i] :
-          this._cast(arguments[i], arguments[0] + (i - 2));
+      let vals;
+      if (this[arraySchemaSymbol] == null) {
+        vals = arguments;
+      } else {
+        vals = [];
+        for (let i = 0; i < arguments.length; ++i) {
+          vals[i] = i < 2 ?
+            arguments[i] :
+            this._cast(arguments[i], arguments[0] + (i - 2));
+        }
       }
+
       ret = [].splice.apply(this, vals);
       this._registerAtomic('$set', this);
     }
@@ -84867,6 +85680,19 @@ class CoreDocumentArray extends CoreMongooseArray {
     return this.toObject(internalToObjectOptions);
   }
 
+  /*!
+   * ignore
+   */
+
+  map() {
+    const ret = super.map.apply(this, arguments);
+    ret[arraySchemaSymbol] = null;
+    ret[arrayPathSymbol] = null;
+    ret[arrayParentSymbol] = null;
+
+    return ret;
+  }
+
   /**
    * Overrides MongooseArray#cast
    *
@@ -84876,6 +85702,9 @@ class CoreDocumentArray extends CoreMongooseArray {
    */
 
   _cast(value, index) {
+    if (this[arraySchemaSymbol] == null) {
+      return value;
+    }
     let Constructor = this[arraySchemaSymbol].casterConstructor;
     const isInstance = Constructor.$isMongooseDocumentArray ?
       value && value.isMongooseDocumentArray :
@@ -85257,6 +86086,7 @@ module.exports = MongooseDocumentArray;
 
 const Document = __webpack_require__(/*! ../document_provider */ "../../mongoose/lib/document_provider.js")();
 const EventEmitter = __webpack_require__(/*! events */ "events").EventEmitter;
+const ValidationError = __webpack_require__(/*! ../error/validation */ "../../mongoose/lib/error/validation.js");
 const immediate = __webpack_require__(/*! ../helpers/immediate */ "../../mongoose/lib/helpers/immediate.js");
 const internalToObjectOptions = __webpack_require__(/*! ../options */ "../../mongoose/lib/options.js").internalToObjectOptions;
 const get = __webpack_require__(/*! ../helpers/get */ "../../mongoose/lib/helpers/get.js");
@@ -85527,7 +86357,7 @@ EmbeddedDocument.prototype.invalidate = function(path, err, val) {
   Document.prototype.invalidate.call(this, path, err, val);
 
   if (!this[documentArrayParent] || this.__index == null) {
-    if (err[validatorErrorSymbol] || err.name === 'ValidationError') {
+    if (err[validatorErrorSymbol] || err instanceof ValidationError) {
       return true;
     }
     throw err;
@@ -86119,7 +86949,7 @@ Subdocument.prototype.isModified = function(paths, modifiedPaths) {
     return this.$parent.isModified(paths, modifiedPaths);
   }
 
-  return Document.prototype.isModified(paths, modifiedPaths);
+  return Document.prototype.isModified.call(this, paths, modifiedPaths);
 };
 
 /**
@@ -87685,7 +88515,7 @@ SafeBuffer.allocUnsafeSlow = function (size) {
 /*! exports provided: name, description, version, author, keywords, license, dependencies, devDependencies, directories, scripts, main, engines, bugs, repository, homepage, browser, mocha, eslintConfig, funding, default */
 /***/ (function(module) {
 
-module.exports = JSON.parse("{\"name\":\"mongoose\",\"description\":\"Mongoose MongoDB ODM\",\"version\":\"5.8.0\",\"author\":\"Guillermo Rauch <guillermo@learnboost.com>\",\"keywords\":[\"mongodb\",\"document\",\"model\",\"schema\",\"database\",\"odm\",\"data\",\"datastore\",\"query\",\"nosql\",\"orm\",\"db\"],\"license\":\"MIT\",\"dependencies\":{\"bson\":\"~1.1.1\",\"kareem\":\"2.3.1\",\"mongodb\":\"3.3.5\",\"mongoose-legacy-pluralize\":\"1.0.2\",\"mpath\":\"0.6.0\",\"mquery\":\"3.2.2\",\"ms\":\"2.1.2\",\"regexp-clone\":\"1.0.0\",\"safe-buffer\":\"5.1.2\",\"sliced\":\"1.0.1\",\"sift\":\"7.0.1\"},\"devDependencies\":{\"acorn\":\"5.7.3\",\"acquit\":\"1.x\",\"acquit-ignore\":\"0.1.x\",\"acquit-require\":\"0.1.x\",\"async\":\"2.6.2\",\"babel-loader\":\"7.1.4\",\"babel-preset-es2015\":\"6.24.1\",\"benchmark\":\"2.1.4\",\"bluebird\":\"3.5.5\",\"chalk\":\"2.4.2\",\"cheerio\":\"1.0.0-rc.2\",\"co\":\"4.6.0\",\"dox\":\"0.3.1\",\"eslint\":\"5.16.0\",\"highlight.js\":\"9.1.0\",\"lodash.isequal\":\"4.5.0\",\"lodash.isequalwith\":\"4.4.0\",\"marked\":\"0.6.2\",\"mocha\":\"5.x\",\"moment\":\"2.x\",\"mongodb-topology-manager\":\"1.0.11\",\"mongoose-long\":\"0.2.1\",\"node-static\":\"0.7.11\",\"object-sizeof\":\"1.3.0\",\"promise-debug\":\"0.1.1\",\"pug\":\"2.0.3\",\"q\":\"1.5.1\",\"semver\":\"5.5.0\",\"uuid\":\"2.0.3\",\"uuid-parse\":\"1.0.0\",\"validator\":\"10.8.0\",\"webpack\":\"4.16.4\"},\"directories\":{\"lib\":\"./lib/mongoose\"},\"scripts\":{\"lint\":\"eslint .\",\"build-browser\":\"node build-browser.js\",\"prepublishOnly\":\"npm run build-browser\",\"release\":\"git pull && git push origin master --tags && npm publish\",\"release-legacy\":\"git pull origin 4.x && git push origin 4.x --tags && npm publish --tag legacy\",\"test\":\"mocha --exit\",\"test-cov\":\"nyc --reporter=html --reporter=text npm test\"},\"main\":\"./index.js\",\"engines\":{\"node\":\">=4.0.0\"},\"bugs\":{\"url\":\"https://github.com/Automattic/mongoose/issues/new\"},\"repository\":{\"type\":\"git\",\"url\":\"git://github.com/Automattic/mongoose.git\"},\"homepage\":\"https://mongoosejs.com\",\"browser\":\"./dist/browser.umd.js\",\"mocha\":{\"extension\":[\"test.js\"],\"watch-files\":[\"test/**/*.js\"]},\"eslintConfig\":{\"extends\":[\"eslint:recommended\"],\"parserOptions\":{\"ecmaVersion\":2015},\"env\":{\"node\":true,\"es6\":true},\"rules\":{\"comma-style\":\"error\",\"indent\":[\"error\",2,{\"SwitchCase\":1,\"VariableDeclarator\":2}],\"keyword-spacing\":\"error\",\"no-buffer-constructor\":\"warn\",\"no-console\":\"off\",\"no-multi-spaces\":\"error\",\"no-constant-condition\":\"off\",\"func-call-spacing\":\"error\",\"no-trailing-spaces\":\"error\",\"quotes\":[\"error\",\"single\"],\"semi\":\"error\",\"space-before-blocks\":\"error\",\"space-before-function-paren\":[\"error\",\"never\"],\"space-infix-ops\":\"error\",\"space-unary-ops\":\"error\",\"no-var\":\"warn\",\"prefer-const\":\"warn\",\"strict\":[\"error\",\"global\"],\"no-restricted-globals\":[\"error\",{\"name\":\"context\",\"message\":\"Don't use Mocha's global context\"}]}},\"funding\":{\"type\":\"opencollective\",\"url\":\"https://opencollective.com/mongoose\"}}");
+module.exports = JSON.parse("{\"name\":\"mongoose\",\"description\":\"Mongoose MongoDB ODM\",\"version\":\"5.8.7\",\"author\":\"Guillermo Rauch <guillermo@learnboost.com>\",\"keywords\":[\"mongodb\",\"document\",\"model\",\"schema\",\"database\",\"odm\",\"data\",\"datastore\",\"query\",\"nosql\",\"orm\",\"db\"],\"license\":\"MIT\",\"dependencies\":{\"bson\":\"~1.1.1\",\"kareem\":\"2.3.1\",\"mongodb\":\"3.4.1\",\"mongoose-legacy-pluralize\":\"1.0.2\",\"mpath\":\"0.6.0\",\"mquery\":\"3.2.2\",\"ms\":\"2.1.2\",\"regexp-clone\":\"1.0.0\",\"safe-buffer\":\"5.1.2\",\"sliced\":\"1.0.1\",\"sift\":\"7.0.1\"},\"devDependencies\":{\"acorn\":\"5.7.3\",\"acquit\":\"1.x\",\"acquit-ignore\":\"0.1.x\",\"acquit-require\":\"0.1.x\",\"async\":\"2.6.2\",\"babel-loader\":\"7.1.4\",\"babel-preset-es2015\":\"6.24.1\",\"benchmark\":\"2.1.4\",\"bluebird\":\"3.5.5\",\"chalk\":\"2.4.2\",\"cheerio\":\"1.0.0-rc.2\",\"co\":\"4.6.0\",\"dox\":\"0.3.1\",\"eslint\":\"5.16.0\",\"highlight.js\":\"9.1.0\",\"lodash.isequal\":\"4.5.0\",\"lodash.isequalwith\":\"4.4.0\",\"marked\":\"0.6.2\",\"mocha\":\"5.x\",\"moment\":\"2.x\",\"mongodb-topology-manager\":\"1.0.11\",\"mongoose-long\":\"0.2.1\",\"node-static\":\"0.7.11\",\"object-sizeof\":\"1.3.0\",\"promise-debug\":\"0.1.1\",\"pug\":\"2.0.3\",\"q\":\"1.5.1\",\"semver\":\"5.5.0\",\"uuid\":\"2.0.3\",\"uuid-parse\":\"1.0.0\",\"validator\":\"10.8.0\",\"webpack\":\"4.16.4\"},\"directories\":{\"lib\":\"./lib/mongoose\"},\"scripts\":{\"lint\":\"eslint .\",\"build-browser\":\"node build-browser.js\",\"prepublishOnly\":\"npm run build-browser\",\"release\":\"git pull && git push origin master --tags && npm publish\",\"release-legacy\":\"git pull origin 4.x && git push origin 4.x --tags && npm publish --tag legacy\",\"test\":\"mocha --exit\",\"test-cov\":\"nyc --reporter=html --reporter=text npm test\"},\"main\":\"./index.js\",\"engines\":{\"node\":\">=4.0.0\"},\"bugs\":{\"url\":\"https://github.com/Automattic/mongoose/issues/new\"},\"repository\":{\"type\":\"git\",\"url\":\"git://github.com/Automattic/mongoose.git\"},\"homepage\":\"https://mongoosejs.com\",\"browser\":\"./dist/browser.umd.js\",\"mocha\":{\"extension\":[\"test.js\"],\"watch-files\":[\"test/**/*.js\"]},\"eslintConfig\":{\"extends\":[\"eslint:recommended\"],\"parserOptions\":{\"ecmaVersion\":2015},\"env\":{\"node\":true,\"es6\":true},\"rules\":{\"comma-style\":\"error\",\"indent\":[\"error\",2,{\"SwitchCase\":1,\"VariableDeclarator\":2}],\"keyword-spacing\":\"error\",\"no-buffer-constructor\":\"warn\",\"no-console\":\"off\",\"no-multi-spaces\":\"error\",\"no-constant-condition\":\"off\",\"func-call-spacing\":\"error\",\"no-trailing-spaces\":\"error\",\"quotes\":[\"error\",\"single\"],\"semi\":\"error\",\"space-before-blocks\":\"error\",\"space-before-function-paren\":[\"error\",\"never\"],\"space-infix-ops\":\"error\",\"space-unary-ops\":\"error\",\"no-var\":\"warn\",\"prefer-const\":\"warn\",\"strict\":[\"error\",\"global\"],\"no-restricted-globals\":[\"error\",{\"name\":\"context\",\"message\":\"Don't use Mocha's global context\"}]}},\"funding\":{\"type\":\"opencollective\",\"url\":\"https://opencollective.com/mongoose\"}}");
 
 /***/ }),
 

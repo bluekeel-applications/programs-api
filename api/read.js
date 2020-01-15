@@ -38,7 +38,7 @@ export async function getAllDomains(context) {
     }
 };
 
-export async function getOneProgram(event, context) {
+export async function getOneProgram(event, context, callback) {
     context.callbackWaitsForEmptyEventLoop = false;
     const data = JSON.parse(event.body);
     try {
@@ -55,15 +55,18 @@ export async function getOneProgram(event, context) {
                 email_optin: data.vars.email_optin
             }
         }, '_id click_count endpoints');
-        return success(program);
+        if(!program) { throw new Error({ message: 'Error occurred getting program.' }); };
 
+        const response = success(program);
+        callback(null, response);
     } catch (err) {
         console.log('Error getting User by ID:', err);
-        return failure({status: false});
+        const response = failure(err);
+        callback(null, response);
     }
 };
 
-export async function getProgramOffers(event, context) {
+export async function getProgramOffers(event, context, callback) {
     context.callbackWaitsForEmptyEventLoop = false;
     const data = JSON.parse(event.body);
     try {
@@ -77,11 +80,14 @@ export async function getProgramOffers(event, context) {
             'vars.debt_optin': data.debt_optin,
             'vars.email_optin': data.email_optin
         }, '_id click_count endpoints');
-        return success(program);
+        if(!program) { throw new Error({ message: 'Error occurred getting program offers.' }); };
 
+        const response = success(program);
+        callback(null, response);
     } catch (err) {
         console.log('Error getting User by ID:', err);
-        return failure({status: false});
+        const response = failure(err);
+        callback(null, response);
     }
 };
 
@@ -96,9 +102,7 @@ export async function getByPid(event, context) {
         return success(programs);
     } catch (err) {
         console.log('Error getting vars by pid:', err);
-        return failure({
-            status: false
-        });
+        return failure(err);
     }
 };
 

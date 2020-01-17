@@ -14,9 +14,12 @@ const connectToDatabase = async () => {
     console.log('=> using new database connection');
     const db = await mongoose.connect(process.env.DB_CONNECTION_STRING, {
       useNewUrlParser: true,
-      // If not connected, return errors immediately rather than waiting for reconnect
+      // If not connected, return errors immediately rather than waiting for reconnect:
       bufferCommands: false, // Disable mongoose buffering
-      bufferMaxEntries: 0 // and MongoDB driver buffering
+      bufferMaxEntries: 0, // and MongoDB driver buffering
+      // To use the new Server Discover and Monitoring engine:
+      useUnifiedTopology: true,
+      useFindAndModify: false
     });
     isConnected = db.connections[0].readyState;
 

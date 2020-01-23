@@ -2,7 +2,7 @@ import connectToDatabase from '../db';
 import Program from '../models/Program';
 import Domain from '../models/Domain';
 
-import { success, buildQueryObj, failure } from "../libs/response-lib";
+import { success, buildQueryObj, buildFullObj, failure } from "../libs/response-lib";
 
 export const newDomain = async (event, context) => {
     context.callbackWaitsForEmptyEventLoop = false;
@@ -44,22 +44,23 @@ export const endpoint = async (event, context) => {
     const { name, url, jump, usage, offer_page, four_button } = data.new_endpoint;
     try {
         await connectToDatabase();
-        let queryObj = buildQueryObj(data);
+        let fullObj = buildFullObj(data);
         let newEndpoint = {
             name,
-            url,
+            url: url || 'N/A',
             jump: jump || 'N/A',
             usage: usage || 0,
             offer_page: offer_page || 'wall',
             four_button: four_button || ['N/A']
         };
+        const queryObj = buildQueryObj(data);
         //Check if program exists in DB; make one if not
         let program = await Program.findOne(queryObj, '_id endpoints click_count');
         if (!program) {
             const endpointField = {
                 endpoints: []
             };
-            const newProgram = Object.assign(queryObj, endpointField);
+            const newProgram = Object.assign(fullObj, endpointField);
             program = await Program.create(newProgram);
         }
         //Grab endpoint list

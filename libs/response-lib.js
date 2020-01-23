@@ -31,6 +31,19 @@ export const buildQueryObj = (data) => {
             vertical: data.vars.vertical,
             loan_type: data.vars.loan_type,
             debt_type: data.vars.debt_type,
+            debt_amount: data.vars.debt_amount
+        }
+    };
+};
+
+export const buildFullObj = (data) => {
+    return {
+        domain: data.domain,
+        pid: data.pid,
+        vars: {
+            vertical: data.vars.vertical,
+            loan_type: data.vars.loan_type,
+            debt_type: data.vars.debt_type,
             debt_amount: data.vars.debt_amount,
             checking_optin: data.vars.checking_optin,
             debt_optin: data.vars.debt_optin,

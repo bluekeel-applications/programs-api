@@ -7,15 +7,14 @@ import { failure, success } from "../libs/response-lib";
 export const endpoint = async(event, context) => {
     context.callbackWaitsForEmptyEventLoop = false;
     const endpointId = event.queryStringParameters.ep_id;
-    const programId = event.pathParameters.program_id;
+    const programId = event.pathParameters.program_id || 0;
     const data = JSON.parse(event.body);
     try {
         await connectToDatabase();
-        let program;
-        program = await Program.findById(programId);
-        if (!program) {
-            throw new Error('There is no Program found with ID:', programId);
-        }
+        if(programId === 0) { throw new Error('Program ID is missing...please remedy, and try again'); };
+
+        let program = await Program.findById(programId);
+        if (!program) { throw new Error('There is no Program found with ID:', programId); };
         program.endpoints.id(endpointId).url = data.url || 'N/A';
         program.endpoints.id(endpointId).name = data.name || 'N/A';
         program.endpoints.id(endpointId).usage = data.usage || 0;
@@ -68,7 +67,16 @@ export const programDomain = async(event, context) => {
         program = await Domain.findById(programId);
         if (!program) {
             throw new Error('There is no Program found with ID:', programId);
-        }
+        };
+        // Check to see if update is to pid or domain name
+        // and update associated program endpoints
+        if(program.pid !== data.pid_value){
+            await Program.updateMany({ pid: program.pid }, { pid: data.pid_value });
+        };
+        if(program.domain !== data.domain_value){
+            await Program.updateMany({ domain: program.domain }, { domain: data.domain_value });
+        };
+
         program.title = data.name_value || 'N/A';
         program.pid = data.pid_value || 1;
         program.domain = data.domain_value || 'N/A';

@@ -46,7 +46,7 @@ export async function getOneProgram(event, context) {
         await connectToDatabase();
         const program = await Program.find({
             domain: data.domain,
-            pid: Number(data.pid),
+            pid: { $all: [data.pid] },
             vars: {
                 vertical: data.vars.vertical,
                 loan_type: data.vars.loan_type,
@@ -72,7 +72,7 @@ export async function getProgramOffers(event, context) {
     try {
         await connectToDatabase();
         const program = await Program.find({
-            'pid': data.pid,
+            'pid': { $all: [data.pid] },
             'vars.vertical': data.vertical,
             'vars.loan_type': data.loan_type,
             'vars.debt_type': data.debt_type,
@@ -95,7 +95,7 @@ export async function getByPid(event, context) {
     try {
         await connectToDatabase();
         const programs = await Program.find({
-            pid: Number(reqPid)
+            pid: { $all: [reqPid] }
         }, '_id domain pid click_count vars endpoints');
         if(!programs) { throw new Error({ message: 'Error occurred getting program by pid.' }); };
         return success(programs);
@@ -114,10 +114,35 @@ export async function getByPidVertical(event, context) {
     const reqVertical = event.pathParameters.vertical;
     try {
         await connectToDatabase();
-        const programs = await Program.find({ pid: reqPid });
+        const programs = await Program.find({ pid: { $all: [reqPid] } });
         if(!programs) { throw new Error({ message: `Error occurred getting programs for pid: ${reqPid}` }); };
         const programVerticals = programs.map((program) => {
             if(program.vars.vertical === reqVertical && program.endpoints.length > 0) {
+                return program;
+            };
+        });
+        const filteredProgramVerticals = programVerticals.filter((item) => {
+            return item != null;
+        });
+        return success(filteredProgramVerticals);
+    } catch (err) {
+        console.log('Error getting vars by pid:', err);
+        return failure({
+            status: false,
+            body: err
+        });
+    }
+};
+
+export async function getByPost(event, context) {
+    context.callbackWaitsForEmptyEventLoop = false;
+    const data = JSON.parse(event.body);
+    try {
+        await connectToDatabase();
+        const programs = await Program.find({ pid: { $all: data.pid } });
+        if(!programs) { throw new Error({ message: `Error occurred getting programs for pid: ${reqPid}` }); };
+        const programVerticals = programs.map((program) => {
+            if(program.vars.vertical === data.vertical && program.endpoints.length > 0) {
                 return program;
             };
         });

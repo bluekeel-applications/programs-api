@@ -84,6 +84,13 @@ functions:
           path: api/program/all_domains
           method: get
           cors: true
+  getByPost:
+    handler: api/read.getByPost
+    events:
+      - http:
+          path: api/program/table
+          method: post
+          cors: true
   getByPid:
     handler: api/read.getByPid
     events:

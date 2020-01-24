@@ -70,15 +70,15 @@ export const programDomain = async(event, context) => {
         };
         // Check to see if update is to pid or domain name
         // and update associated program endpoints
-        if(program.pid !== data.pid_value){
-            await Program.updateMany({ pid: program.pid }, { pid: data.pid_value });
+        if(program.pid !== data.pid_values){
+            await Program.updateMany({ pid: { $all: program.pid } }, { pid: data.pid_values });
         };
         if(program.domain !== data.domain_value){
             await Program.updateMany({ domain: program.domain }, { domain: data.domain_value });
         };
 
         program.title = data.name_value || 'N/A';
-        program.pid = data.pid_value || 1;
+        program.pid = data.pid_values || [1];
         program.domain = data.domain_value || 'N/A';
         program.description = data.description_value || 'N/A';
         program.avatar = data.avatar_src || 'N/A';

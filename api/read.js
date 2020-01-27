@@ -46,7 +46,7 @@ export async function getOneProgram(event, context) {
         await connectToDatabase();
         const program = await Program.find({
             domain: data.domain,
-            pid: { $all: [data.pid] },
+            pid: { $all: data.pid },
             vars: {
                 vertical: data.vars.vertical,
                 loan_type: data.vars.loan_type,
@@ -140,7 +140,7 @@ export async function getByPost(event, context) {
     try {
         await connectToDatabase();
         const programs = await Program.find({ pid: { $all: data.pid } });
-        if(!programs) { throw new Error({ message: `Error occurred getting programs for pid: ${reqPid}` }); };
+        if(!programs) { throw new Error({ message: `Error occurred getting programs for pid: ${data.pid}` }); };
         const programVerticals = programs.map((program) => {
             if(program.vars.vertical === data.vertical && program.endpoints.length > 0) {
                 return program;

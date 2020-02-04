@@ -72,7 +72,7 @@ export async function getProgramOffers(event, context) {
     try {
         await connectToDatabase();
         const program = await Program.find({
-            'pid': { $all: [data.pid] },
+            'pid': { $all: data.pid },
             'vars.vertical': data.vertical,
             'vars.loan_type': data.loan_type,
             'vars.debt_type': data.debt_type,
@@ -98,6 +98,7 @@ export async function getByPid(event, context) {
             pid: { $all: [reqPid] }
         }, '_id domain pid click_count vars endpoints');
         if(!programs) { throw new Error({ message: 'Error occurred getting program by pid.' }); };
+
         return success(programs);
     } catch (err) {
         console.log('Error getting vars by pid:', err);
@@ -139,7 +140,7 @@ export async function getByPost(event, context) {
     const data = JSON.parse(event.body);
     try {
         await connectToDatabase();
-        const programs = await Program.find({ pid: { $all: data.pid } });
+        const programs = await Program.find({ pid: { $all: data.pid } }, '_id domain pid click_count vars endpoints');
         if(!programs) { throw new Error({ message: `Error occurred getting programs for pid: ${data.pid}` }); };
         const programVerticals = programs.map((program) => {
             if(program.vars.vertical === data.vertical && program.endpoints.length > 0) {

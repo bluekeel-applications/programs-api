@@ -21,6 +21,8 @@ export const endpoint = async(event, context) => {
         program.endpoints.id(endpointId).jump = data.jump || 'N/A';
         program.endpoints.id(endpointId).offer_page = data.offer_page || 'wall';
         program.endpoints.id(endpointId).four_button = data.four_button || ['N/A'];
+        program.endpoints.id(endpointId).restricted = !!data.restricted;
+        program.endpoints.id(endpointId).states = data.restricted ? data.states || [] : [];
         program.save((err) => {
             if (err) return failure({ status: false, body: err });
             console.log('Endpoint updated successfully for:', data.name);

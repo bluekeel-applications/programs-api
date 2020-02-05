@@ -35,7 +35,7 @@ export const endpoint = async(event, context) => {
     }
 };
 
-export const programEndpoints = async(event, context) => {
+export const programEndpointUsage = async(event, context) => {
     context.callbackWaitsForEmptyEventLoop = false;
     const programId = event.pathParameters.program_id;
     const data = JSON.parse(event.body);
@@ -46,7 +46,9 @@ export const programEndpoints = async(event, context) => {
         if (!program) {
             throw new Error('There is no Program found with ID:', programId);
         }
-        program.endpoints = data;
+        data.forEach(ep => {
+            program.endpoints.id(ep._id).usage = ep.usage;
+        });
         program.save((err) => {
             if (err) return failure({ status: false,body: err });
             console.log('Endpoint updated successfully to Program');

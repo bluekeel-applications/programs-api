@@ -107,7 +107,7 @@ functions:
           cors: true
 # UPDATE
   updateEndpoints:
-    handler: api/update.programEndpoints
+    handler: api/update.programEndpointUsage
     events:
       - http:
           path: api/program/update_endpoints/{program_id}
